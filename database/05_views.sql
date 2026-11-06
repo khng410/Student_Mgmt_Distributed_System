@@ -1,0 +1,144 @@
+﻿/* =====================================================================
+   ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
+   File   : 05_views.sql
+   Mục đích: 5 VIEW ở node điều phối QLSV_TongHop, che vị trí dữ liệu: người
+             dùng và ứng dụng chỉ truy vấn VIEW, không cần biết dòng nào nằm ở
+             node nào.
+   Người viết: ...............          Ngày: ..../11/2026
+   Chạy sau : 04_fragmentation.sql        Chạy lại nhiều lần được.
+
+   DANH SÁCH VIEW
+   ---------------------------------------------------------------------
+   #  Tên                      Loại                Nguồn
+   1  vw_SinhVien_ToanCuc      TOÀN CỤC + BẢO MẬT  UNION ALL SinhVien+Lop của 3 node khoa
+                                                   (không có CCCD/SĐT/địa chỉ)
+   2  vw_SinhVien_DayDu        TÁI THIẾT mảnh dọc  vw_SinhVien_ToanCuc JOIN SinhVien_HoSo
+                                                   (chỉ Phòng Đào tạo được xem)
+   3  vw_DangKy_ToanCuc        TOÀN CỤC            UNION ALL DangKy+LopHocPhan của 3 node
+   4  vw_BangDiem              BÁO CÁO             bảng điểm chi tiết toàn trường
+   5  vw_ThongKe_Khoa_HocKy    BÁO CÁO             thống kê theo khoa và học kỳ
+
+   Quy ước điểm: DiemTK = NULL khi chưa đủ DiemQT và DiemThi -> "Chưa có điểm",
+   không tính vào điểm trung bình.
+
+   LƯU Ý QUYỀN (làm ở 10_security.sql): VIEW ở TongHop đọc bảng ở database khác.
+   Người dùng phải có user ở cả 5 database hoặc bật DB_CHAINING, nếu không sẽ
+   báo lỗi quyền khi SELECT từ VIEW.
+   ===================================================================== */
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+USE QLSV_TongHop;
+GO
+DROP VIEW IF EXISTS dbo.vw_ThongKe_Khoa_HocKy, dbo.vw_BangDiem, dbo.vw_DangKy_ToanCuc,
+                    dbo.vw_SinhVien_DayDu, dbo.vw_SinhVien_ToanCuc;
+GO
+
+/* ---------- 1. VIEW TOÀN CỤC: sinh viên của cả trường ---------- */
+CREATE VIEW dbo.vw_SinhVien_ToanCuc
+AS
+SELECT s.MaSV, s.HoTen, s.NgaySinh, s.GioiTinh, s.MaLop, s.TenLop,
+       s.MaKhoa, k.TenKhoa, s.TrangThai
+FROM (
+    SELECT sv.MaSV, sv.HoTen, sv.NgaySinh, sv.GioiTinh, sv.MaLop, l.TenLop, l.MaKhoa, sv.TrangThai
+    FROM QLSV_CNTT.dbo.SinhVien sv     JOIN QLSV_CNTT.dbo.Lop l     ON l.MaLop = sv.MaLop
+    UNION ALL
+    SELECT sv.MaSV, sv.HoTen, sv.NgaySinh, sv.GioiTinh, sv.MaLop, l.TenLop, l.MaKhoa, sv.TrangThai
+    FROM QLSV_NgoaiNgu.dbo.SinhVien sv JOIN QLSV_NgoaiNgu.dbo.Lop l ON l.MaLop = sv.MaLop
+    UNION ALL
+    SELECT sv.MaSV, sv.HoTen, sv.NgaySinh, sv.GioiTinh, sv.MaLop, l.TenLop, l.MaKhoa, sv.TrangThai
+    FROM QLSV_DuLich.dbo.SinhVien sv   JOIN QLSV_DuLich.dbo.Lop l   ON l.MaLop = sv.MaLop
+) s
+JOIN dbo.Khoa k ON k.MaKhoa = s.MaKhoa;
+GO
+
+/* ---------- 2. VIEW TÁI THIẾT mảnh dọc: ghép học vụ + hồ sơ ---------- */
+CREATE VIEW dbo.vw_SinhVien_DayDu
+AS
+SELECT s.MaSV, s.HoTen, s.NgaySinh, s.GioiTinh, s.MaLop, s.TenLop, s.MaKhoa, s.TenKhoa, s.TrangThai,
+       h.CCCD, h.DienThoai, h.Email, h.DiaChi
+FROM dbo.vw_SinhVien_ToanCuc s
+JOIN dbo.SinhVien_HoSo h ON h.MaSV = s.MaSV;
+GO
+
+/* ---------- 3. VIEW TOÀN CỤC: đăng ký học phần và điểm ---------- */
+CREATE VIEW dbo.vw_DangKy_ToanCuc
+AS
+SELECT d.MaSV, d.MaLHP, d.MaMH, m.TenMH, m.SoTinChi, d.MaHK, d.Nhom, d.MaGV,
+       d.MaKhoa, d.NgayDangKy, d.DiemQT, d.DiemThi, d.DiemTK
+FROM (
+    SELECT dk.MaSV, dk.MaLHP, lp.MaMH, lp.MaHK, lp.Nhom, lp.MaGV, 'CNTT' AS MaKhoa,
+           dk.NgayDangKy, dk.DiemQT, dk.DiemThi, dk.DiemTK
+    FROM QLSV_CNTT.dbo.DangKy dk     JOIN QLSV_CNTT.dbo.LopHocPhan lp     ON lp.MaLHP = dk.MaLHP
+    UNION ALL
+    SELECT dk.MaSV, dk.MaLHP, lp.MaMH, lp.MaHK, lp.Nhom, lp.MaGV, 'NN',
+           dk.NgayDangKy, dk.DiemQT, dk.DiemThi, dk.DiemTK
+    FROM QLSV_NgoaiNgu.dbo.DangKy dk JOIN QLSV_NgoaiNgu.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
+    UNION ALL
+    SELECT dk.MaSV, dk.MaLHP, lp.MaMH, lp.MaHK, lp.Nhom, lp.MaGV, 'DL',
+           dk.NgayDangKy, dk.DiemQT, dk.DiemThi, dk.DiemTK
+    FROM QLSV_DuLich.dbo.DangKy dk   JOIN QLSV_DuLich.dbo.LopHocPhan lp   ON lp.MaLHP = dk.MaLHP
+) d
+JOIN dbo.MonHoc m ON m.MaMH = d.MaMH;
+GO
+
+/* ---------- 4. VIEW BÁO CÁO: bảng điểm chi tiết ---------- */
+CREATE VIEW dbo.vw_BangDiem
+AS
+SELECT s.MaSV, s.HoTen, s.TenLop, s.MaKhoa, s.TenKhoa,
+       d.MaHK, d.MaLHP, d.MaMH, d.TenMH, d.SoTinChi,
+       d.DiemQT, d.DiemThi, d.DiemTK,
+       CASE WHEN d.DiemTK IS NULL THEN N'Chưa có điểm'
+            WHEN d.DiemTK >= 4     THEN N'Đạt'
+            ELSE N'Không đạt' END AS KetQua
+FROM dbo.vw_DangKy_ToanCuc d
+JOIN dbo.vw_SinhVien_ToanCuc s ON s.MaSV = d.MaSV;
+GO
+
+/* ---------- 5. VIEW BÁO CÁO: thống kê theo khoa và học kỳ ---------- */
+CREATE VIEW dbo.vw_ThongKe_Khoa_HocKy
+AS
+SELECT MaKhoa, TenKhoa, MaHK,
+       COUNT(DISTINCT MaSV)  AS SoSinhVien,
+       COUNT(*)              AS SoLuotDangKy,
+       COUNT(DiemTK)         AS SoLuotCoDiem,
+       CAST(AVG(DiemTK) AS DECIMAL(4,2)) AS DiemTB,
+       SUM(CASE WHEN DiemTK < 4 THEN 1 ELSE 0 END) AS SoLuotKhongDat,
+       CAST(100.0 * SUM(CASE WHEN DiemTK >= 4 THEN 1 ELSE 0 END)
+            / NULLIF(COUNT(DiemTK), 0) AS DECIMAL(5,2)) AS TyLeDat
+FROM dbo.vw_BangDiem
+GROUP BY MaKhoa, TenKhoa, MaHK;
+GO
+
+
+/* =====================================================================
+   KIỂM TRA: VIEW toàn cục phải tương đương dữ liệu logic của CSDL tập trung
+   Thieu = có ở QLSV_TapTrung nhưng không có ở VIEW; Thua = ngược lại. Cả hai = 0 là đạt.
+   ===================================================================== */
+SELECT N'vw_SinhVien_ToanCuc' AS KiemTra,
+  (SELECT COUNT(*) FROM (SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai FROM QLSV_TapTrung.dbo.SinhVien
+                         EXCEPT SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai FROM dbo.vw_SinhVien_ToanCuc) a) AS Thieu,
+  (SELECT COUNT(*) FROM (SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai FROM dbo.vw_SinhVien_ToanCuc
+                         EXCEPT SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai FROM QLSV_TapTrung.dbo.SinhVien) b) AS Thua
+UNION ALL
+SELECT N'vw_SinhVien_DayDu (tái thiết dọc)',
+  (SELECT COUNT(*) FROM (SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai, CCCD, DienThoai, Email, DiaChi FROM QLSV_TapTrung.dbo.SinhVien
+                         EXCEPT SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai, CCCD, DienThoai, Email, DiaChi FROM dbo.vw_SinhVien_DayDu) a),
+  (SELECT COUNT(*) FROM (SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai, CCCD, DienThoai, Email, DiaChi FROM dbo.vw_SinhVien_DayDu
+                         EXCEPT SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai, CCCD, DienThoai, Email, DiaChi FROM QLSV_TapTrung.dbo.SinhVien) b)
+UNION ALL
+SELECT N'vw_DangKy_ToanCuc',
+  (SELECT COUNT(*) FROM (SELECT MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi, DiemTK FROM QLSV_TapTrung.dbo.DangKy
+                         EXCEPT SELECT MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi, DiemTK FROM dbo.vw_DangKy_ToanCuc) a),
+  (SELECT COUNT(*) FROM (SELECT MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi, DiemTK FROM dbo.vw_DangKy_ToanCuc
+                         EXCEPT SELECT MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi, DiemTK FROM QLSV_TapTrung.dbo.DangKy) b);
+GO
+
+/* ---------- Ví dụ dùng VIEW (chụp ảnh cho báo cáo) ---------- */
+SELECT TOP (10) * FROM dbo.vw_SinhVien_ToanCuc ORDER BY MaSV;
+SELECT TOP (5)  MaSV, HoTen, CCCD, DienThoai FROM dbo.vw_SinhVien_DayDu ORDER BY MaSV;
+SELECT * FROM dbo.vw_ThongKe_Khoa_HocKy ORDER BY MaKhoa, MaHK;
+SELECT TOP (10) MaSV, HoTen, TenMH, MaHK, DiemTK, KetQua FROM dbo.vw_BangDiem
+WHERE KetQua = N'Không đạt' ORDER BY DiemTK;
+GO

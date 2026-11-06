@@ -1,0 +1,79 @@
+erDiagram
+    Khoa ||--o{ GiangVien : "có"
+    Khoa ||--o{ Lop : "quản lý"
+    Khoa |o--o{ MonHoc : "phụ trách"
+    GiangVien |o--o{ Lop : "chủ nhiệm"
+    Lop ||--o{ SinhVien : "gồm"
+    MonHoc ||--o{ LopHocPhan : "mở lớp"
+    HocKy ||--o{ LopHocPhan : "trong"
+    GiangVien ||--o{ LopHocPhan : "giảng dạy"
+    SinhVien ||--o{ DangKy : "đăng ký"
+    LopHocPhan ||--o{ DangKy : "có"
+
+    Khoa {
+        varchar MaKhoa PK
+        nvarchar TenKhoa UK
+        smallint NamThanhLap
+        varchar DienThoai
+        varchar Email UK
+    }
+    HocKy {
+        varchar MaHK PK
+        nvarchar TenHK
+        char NamHoc
+        date NgayBatDau
+        date NgayKetThuc
+    }
+    MonHoc {
+        varchar MaMH PK
+        nvarchar TenMH UK
+        tinyint SoTinChi
+        nvarchar LoaiMH
+        varchar MaKhoa FK
+    }
+    GiangVien {
+        varchar MaGV PK
+        nvarchar HoTen
+        nvarchar GioiTinh
+        date NgaySinh
+        nvarchar HocVi
+        varchar Email UK
+        varchar DienThoai
+        varchar MaKhoa FK
+    }
+    Lop {
+        varchar MaLop PK
+        nvarchar TenLop UK
+        char NienKhoa
+        varchar MaKhoa FK
+        varchar MaGVCN FK
+    }
+    SinhVien {
+        char MaSV PK
+        nvarchar HoTen
+        date NgaySinh
+        nvarchar GioiTinh
+        varchar MaLop FK
+        nvarchar TrangThai
+        char CCCD UK
+        varchar DienThoai
+        varchar Email UK
+        nvarchar DiaChi
+    }
+    LopHocPhan {
+        varchar MaLHP PK
+        varchar MaMH FK
+        varchar MaHK FK
+        tinyint Nhom
+        varchar MaGV FK
+        smallint SiSoToiDa
+        varchar PhongHoc
+    }
+    DangKy {
+        char MaSV PK, FK
+        varchar MaLHP PK, FK
+        date NgayDangKy
+        decimal DiemQT
+        decimal DiemThi
+        decimal DiemTK "40% QT + 60% Thi"
+    }
