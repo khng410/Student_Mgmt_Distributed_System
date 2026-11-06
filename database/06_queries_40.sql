@@ -366,13 +366,17 @@ SELECT N'Sau ROLLBACK' AS Buoc, TrangThai, COUNT(*) AS SoSV FROM dbo.vw_SinhVien
 GO
 
 -- Câu 34 (g): SỬA kèm truy vấn con: tăng thêm 10 chỗ cho lớp học phần CNTT đã đầy từ một nửa trở lên.
---   OUTPUT cho thấy sĩ số tối đa cũ và mới của từng lớp bị đổi.
+--   OUTPUT ... INTO cho thấy sĩ số tối đa cũ và mới của từng lớp bị đổi.
 BEGIN TRAN;
+    DECLARE @doi TABLE (MaLHP VARCHAR(20), SiSoCu SMALLINT, SiSoMoi SMALLINT);
+
     UPDATE lp
     SET SiSoToiDa = lp.SiSoToiDa + 10
-    OUTPUT inserted.MaLHP, deleted.SiSoToiDa AS SiSoCu, inserted.SiSoToiDa AS SiSoMoi
+    OUTPUT inserted.MaLHP, deleted.SiSoToiDa, inserted.SiSoToiDa INTO @doi   -- INTO: bảng có trigger (09)
     FROM QLSV_CNTT.dbo.LopHocPhan lp
     WHERE (SELECT COUNT(*) FROM QLSV_CNTT.dbo.DangKy d WHERE d.MaLHP = lp.MaLHP) * 2 >= lp.SiSoToiDa;
+
+    SELECT MaLHP, SiSoCu, SiSoMoi FROM @doi ORDER BY MaLHP;
 ROLLBACK TRAN;
 GO
 
@@ -380,12 +384,15 @@ GO
 BEGIN TRAN;
     DECLARE @truoc2 INT = (SELECT COUNT(*) FROM QLSV_DuLich.dbo.DangKy);
 
+    DECLARE @xoa TABLE (MaSV CHAR(8), MaLHP VARCHAR(20));
+
     DELETE dk
-    OUTPUT deleted.MaSV, deleted.MaLHP
+    OUTPUT deleted.MaSV, deleted.MaLHP INTO @xoa                               -- INTO: bảng có trigger (09)
     FROM QLSV_DuLich.dbo.DangKy dk
     JOIN QLSV_DuLich.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
     WHERE lp.MaHK = 'HK1-2627' AND dk.DiemQT IS NULL AND dk.DiemThi IS NULL;
 
+    SELECT MaSV, MaLHP FROM @xoa ORDER BY MaSV, MaLHP;
     SELECT @truoc2 AS SoDongTruoc, COUNT(*) AS SoDongSau FROM QLSV_DuLich.dbo.DangKy;
 ROLLBACK TRAN;
 GO
