@@ -71,8 +71,8 @@ Kết thúc tuần, các script từ `05` đến `12` chạy không lỗi và c�
 
 | # | Việc | Hạn | Trạng thái | Kết quả |
 | --- | --- | --- | --- | --- |
-| 1 | Truy vấn nhóm a–d: đơn giản 5, aggregate 7, GROUP BY/HAVING 5, cực trị/top-N 4 (21 câu) | Nov 16, 2026 | Chưa làm | `database/06_queries_40.sql` |
-| 2 | Truy vấn nhóm e–h: “chưa có” 5, UNION/INTERSECT/EXCEPT 3, INSERT/UPDATE/DELETE 7, phép chia 4 (19 câu); ghi chú rõ 15+ câu phân tán | Nov 17, 2026 | Chưa làm | `database/06_queries_40.sql` |
+| 1 | Truy vấn nhóm a–d: đơn giản 5, aggregate 7, GROUP BY/HAVING 5, cực trị/top-N 4 (21 câu) | Nov 16, 2026 | Đã xong | `database/06_queries_40.sql` |
+| 2 | Truy vấn nhóm e–h: “chưa có” 5, UNION/INTERSECT/EXCEPT 3, INSERT/UPDATE/DELETE 7, phép chia 4 (19 câu); ghi chú rõ 15+ câu phân tán | Nov 17, 2026 | Đã xong | `database/06_queries_40.sql` |
 | 3 | Hoàn thiện 5 VIEW: thêm view báo cáo điểm theo khoa và view bảo mật ẩn CCCD/SĐT | Nov 17, 2026 | Đã xong | `database/05_views.sql` |
 | 4 | 7 stored procedure có tham số và ví dụ EXEC; 2 thủ tục có transaction + TRY…CATCH (ví dụ chuyển sinh viên sang khoa khác = xóa ở node cũ, thêm ở node mới) | Nov 18, 2026 | Chưa làm | `database/07_procedures.sql` |
 | 5 | 8 function: scalar (điểm TB tích lũy, xếp loại học lực) và table-valued (bảng điểm 1 sinh viên, danh sách theo lớp) | Nov 18, 2026 | Chưa làm | `database/08_functions.sql` |
