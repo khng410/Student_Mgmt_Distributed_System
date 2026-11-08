@@ -77,7 +77,7 @@ Kết thúc tuần, các script từ `05` đến `12` chạy không lỗi và c�
 | 4 | 7 stored procedure (đã làm 14: 7 lõi + 7 bổ sung cho app/demo) có tham số và ví dụ EXEC; 2 thủ tục có transaction + TRY…CATCH (ví dụ chuyển sinh viên sang khoa khác = xóa ở node cũ, thêm ở node mới) | Nov 18, 2026 | Đã xong | `database/07_procedures.sql` |
 | 5 | 8 function: scalar (điểm TB tích lũy, xếp loại học lực) và table-valued (bảng điểm 1 sinh viên, danh sách theo lớp) | Nov 18, 2026 | Đã xong | `database/08_functions.sql` |
 | 6 | 5 trigger: điểm trong 0–10, MaMH phải có ở TongHop, ghi NhatKy khi sửa/xóa điểm, chặn xóa sinh viên đã có điểm… | Nov 19, 2026 | Đã xong | `database/09_triggers.sql` |
-| 7 | Bảo mật: 5+ LOGIN/USER/ROLE (Admin, Phòng Đào tạo, Giáo vụ từng khoa); GRANT, DENY, REVOKE; có 1 ca được phép và 1 ca bị từ chối | Nov 19, 2026 | Chưa làm | `database/10_security.sql` |
+| 7 | Bảo mật: 5+ LOGIN/USER/ROLE (Admin, Phòng Đào tạo, Giáo vụ từng khoa); GRANT, DENY, REVOKE; có 1 ca được phép và 1 ca bị từ chối | Nov 19, 2026 | Đã xong | `database/10_security.sql` |
 | 8 | Transaction COMMIT và ROLLBACK có lỗi cố ý; kịch bản blocking/deadlock với 2 cửa sổ SSMS, kiểm tra bằng `sys.dm_tran_locks`, `sys.dm_exec_requests` | Nov 20, 2026 | Chưa làm | `database/11_transactions_concurrency.sql` |
 | 9 | Tạo loopback Linked Server `LS_LOCAL` và vài truy vấn tên 4 phần | Nov 20, 2026 | Chưa làm | `database/12_linked_server.sql` |
 | 10 | App: trang CRUD sinh viên và điểm, gọi stored procedure thay vì SQL trực tiếp | Nov 20, 2026 | Chưa làm | `app/` |
