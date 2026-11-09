@@ -59,7 +59,7 @@ Kết thúc tuần, 4 database chạy được từ script, có dữ liệu mẫ
 | 5 | Sinh dữ liệu mẫu có ý nghĩa, mỗi bảng chính tối thiểu 20 dòng mỗi khoa | Nov 11, 2026 | Đã xong | `database/03_seed_data.sql` |
 | 6 | Viết script chuyển dữ liệu từ CSDL tập trung sang các mảnh (INSERT…SELECT theo MaKhoa) và kiểm tra đủ, không trùng | Nov 12, 2026 | Đã xong | `database/04_fragmentation.sql` |
 | 7 | Tạo VIEW toàn cục (UNION ALL) và VIEW tái thiết mảnh dọc (JOIN) | Nov 12, 2026 | Đã xong | `database/05_views.sql` |
-| 8 | Dựng khung app Streamlit, kết nối pyodbc tới QLSV\_TongHop, trang đăng nhập | Nov 13, 2026 | Chưa làm | `app/` chạy được |
+| 8 | Dựng khung app Streamlit, kết nối pyodbc tới QLSV\_TongHop, trang đăng nhập | Nov 13, 2026 | Đã xong (đã thử với SQL Server) | `app/` chạy được |
 | 9 | Viết báo cáo mục 1–5 (bìa, giới thiệu, phân tích yêu cầu, thiết kế tập trung, thiết kế phân tán) | Nov 13, 2026 | Chưa làm | Báo cáo bản nháp 1 |
 | 10 | Họp mốc 1: chạy lại script 01–05 trên một máy sạch | Nov 13, 2026 | Chưa làm | Biên bản ngắn |
 
@@ -80,7 +80,7 @@ Kết thúc tuần, các script từ `05` đến `12` chạy không lỗi và c�
 | 7 | Bảo mật: 5+ LOGIN/USER/ROLE (Admin, Phòng Đào tạo, Giáo vụ từng khoa); GRANT, DENY, REVOKE; có 1 ca được phép và 1 ca bị từ chối | Nov 19, 2026 | Đã xong | `database/10_security.sql` |
 | 8 | Transaction COMMIT và ROLLBACK có lỗi cố ý; kịch bản blocking/deadlock với 2 cửa sổ SSMS, kiểm tra bằng `sys.dm_tran_locks`, `sys.dm_exec_requests` | Nov 20, 2026 | Đã xong A, B; C (deadlock) chưa chạy thử | `database/11_transactions_concurrency.sql` |
 | 9 | Tạo loopback Linked Server `LS_LOCAL` và vài truy vấn tên 4 phần | Nov 20, 2026 | Đã xong | `database/12_linked_server.sql` |
-| 10 | App: trang CRUD sinh viên và điểm, gọi stored procedure thay vì SQL trực tiếp | Nov 20, 2026 | Chưa làm | `app/` |
+| 10 | App: trang CRUD sinh viên và điểm, gọi stored procedure thay vì SQL trực tiếp | Nov 20, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 11 | Họp mốc 2: chạy lại toàn bộ script, chụp ảnh kết quả vào `images/` | Nov 20, 2026 | Chưa làm | Ảnh demo |
 
 Bẫy hay gặp: VIEW ở QLSV\_TongHop đọc bảng ở database khác sẽ báo lỗi quyền nếu user không tồn tại ở database đó. Cần tạo user cho cùng login ở cả 4 database, hoặc bật `DB_CHAINING` — nên thử sớm ngay khi làm việc 7.
@@ -92,10 +92,10 @@ Kết thúc tuần, nhóm nộp file .zip đã chạy thử trên một máy kh�
 | # | Việc | Hạn | Trạng thái | Kết quả |
 | --- | --- | --- | --- | --- |
 | 1 | Hiệu năng: chạy 1–2 truy vấn với STATISTICS IO/TIME và Actual Execution Plan, trước và sau khi tạo index (ví dụ `DangKy(MaSV)`); ghi nhận xét | Nov 22, 2026 | Chưa làm | Ảnh plan + nhận xét |
-| 2 | App: trang tìm kiếm/lọc sinh viên và điểm qua VIEW toàn cục | Nov 22, 2026 | Chưa làm | `app/` |
-| 3 | App: dashboard thống kê toàn trường và theo khoa (sĩ số, điểm TB, xếp loại) | Nov 23, 2026 | Chưa làm | `app/` |
-| 4 | App: trang “Phân tán” — chọn node để xem dữ liệu, so với VIEW toàn cục, nút chạy transaction COMMIT/ROLLBACK | Nov 24, 2026 | Chưa làm | `app/` |
-| 5 | App: ẩn/hiện chức năng theo vai trò đăng nhập | Nov 24, 2026 | Chưa làm | `app/` |
+| 2 | App: trang tìm kiếm/lọc sinh viên và điểm qua VIEW toàn cục | Nov 22, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
+| 3 | App: dashboard thống kê toàn trường và theo khoa (sĩ số, điểm TB, xếp loại) | Nov 23, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
+| 4 | App: trang “Phân tán” — chọn node để xem dữ liệu, so với VIEW toàn cục, nút chạy transaction COMMIT/ROLLBACK | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
+| 5 | App: ẩn/hiện chức năng theo vai trò đăng nhập | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 6 | Báo cáo mục 6–11 (tái thiết, 40 truy vấn, đối tượng CSDL, phân quyền, giao dịch, hiệu năng) | Nov 24, 2026 | Chưa làm | Báo cáo bản nháp 2 |
 | 7 | Báo cáo mục 12–14 (giao diện, kết quả kiểm thử, kết luận, bảng phân công) | Nov 25, 2026 | Chưa làm | `report/CSDLPT_DoAn_65131461.docx` |
 | 8 | README: cài đặt, thứ tự chạy script, sửa chuỗi kết nối, `pip install -r requirements.txt`, `streamlit run` | Nov 25, 2026 | Chưa làm | `README.md` |
