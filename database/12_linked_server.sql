@@ -11,7 +11,7 @@
    trỏ về chính nó. Với instance thứ hai thật, chỉ cần đổi @datasrc trong phần 1.
 
    KẾT NỐI: LS_LOCAL đăng nhập lại bằng SQL login lg_daotao (Phòng Đào tạo) nên cần SQL Server
-   bật chế độ đăng nhập hỗn hợp (xem docs/HuongDan_DangNhap_SSMS.md). Nếu không bật được,
+   bật chế độ đăng nhập hỗn hợp (xem docs/HuongDan.md, mục 1.2). Nếu không bật được,
    dùng thay thế: sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'TRUE'
    (đi bằng chính Windows login đang chạy; không cần mật khẩu).
 

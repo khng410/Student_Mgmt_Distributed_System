@@ -31,7 +31,7 @@ database/   12 script SQL, chạy theo thứ tự số
 app/        ứng dụng Streamlit (app.py, config.py, requirements.txt, chay.sh)
 report/     báo cáo Word
 images/     sơ đồ và ảnh demo
-docs/       hướng dẫn chi tiết (đăng nhập, quyền hạn, kiểm thử Linked Server, hiệu năng)
+docs/       HuongDan.md: hướng dẫn chi tiết (đăng nhập, quyền hạn, kiểm thử Linked Server, hiệu năng, chụp ảnh demo)
 ```
 
 ## Yêu cầu
@@ -81,7 +81,7 @@ Mật khẩu ở phần 1 của `database/10_security.sql` (chỉ dùng trên m�
 | `lg_giaovu_cntt`, `lg_giaovu_nn`, `lg_giaovu_dl` | Giáo vụ từng khoa | Chỉ thấy và sửa điểm của khoa mình |
 | `lg_bgh` | Ban giám hiệu | Chỉ xem thống kê |
 
-Chi tiết quyền, cách đổi mật khẩu và đăng nhập thử: `docs/HuongDan_TaiKhoan_QuyenHan.md`, `docs/HuongDan_DangNhap_SSMS.md`.
+Chi tiết quyền, cách đổi mật khẩu và đăng nhập thử: `docs/HuongDan.md` (mục 1 và 2).
 
 ## Chạy ứng dụng
 
@@ -115,14 +115,14 @@ Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa 
 3. **VIEW toàn cục tương đương dữ liệu gốc:** kiểm tra cuối `05_views.sql`.
 4. **COMMIT và ROLLBACK:** phần A của `11_transactions_concurrency.sql`; hoặc hai nút trong trang Phân tán.
 5. **Blocking, deadlock:** phần B và C của `11` (2 cửa sổ), giám sát bằng truy vấn D1, D2.
-6. **Execution Plan và index:** phần E của `11` (Clustered Index Scan → Index Seek). Hướng dẫn: `docs/HuongDan_Test_HieuNang.md`.
-7. **Linked Server, tên 4 phần:** `12_linked_server.sql`. Hướng dẫn: `docs/HuongDan_Test_LinkedServer.md`.
+6. **Execution Plan và index:** phần E của `11` (Clustered Index Scan → Index Seek). Hướng dẫn: `docs/HuongDan.md` (mục 4).
+7. **Linked Server, tên 4 phần:** `12_linked_server.sql`. Hướng dẫn: `docs/HuongDan.md` (mục 3).
 
 ## Xử lý sự cố
 
 | Dấu hiệu | Cách xử lý |
 | --- | --- |
-| `Login failed for user ...` (18456) | Sai mật khẩu, hoặc SQL Server chưa bật đăng nhập SQL; xem `docs/HuongDan_DangNhap_SSMS.md` |
+| `Login failed for user ...` (18456) | Sai mật khẩu, hoặc SQL Server chưa bật đăng nhập SQL; xem `docs/HuongDan.md` (mục 1.2) |
 | `OpenSSL library could not be loaded` (macOS) | Homebrew đã liên kết OpenSSL 4; chạy `brew unlink openssl@4 && brew link --force openssl@3` |
 | `pyarrow requires NumPy 2.0` | Dùng `bash chay.sh` (môi trường ảo riêng) thay vì môi trường conda cũ |
 | `module 'config' has no attribute ...` | Sửa `config.py` xong phải khởi động lại ứng dụng (Ctrl+C, chạy lại) |
