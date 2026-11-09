@@ -54,7 +54,7 @@ Kết thúc tuần, 4 database chạy được từ script, có dữ liệu mẫ
 | --- | --- | --- | --- | --- |
 | 1 | Chốt nhóm và vai trò; tạo repo GitHub; cài SQL Server Developer + SSMS trên máy mỗi người | Nov 7, 2026 | Chưa làm | Repo + README khung |
 | 2 | Vẽ ERD tập trung 9 bảng, chuẩn hóa 3NF, xác định PK/FK/CHECK/UNIQUE | Nov 9, 2026 | Đã xong | `images/erd_taptrung.mmd`, `images/erd_taptrung.png` |
-| 3 | Chốt phân mảnh ngang theo MaKhoa, phân mảnh dọc SinhVien\_HoSo; ghi tiêu chí phân mảnh | Nov 9, 2026 | Đã xong | Sơ đồ kiến trúc |
+| 3 | Chốt phân mảnh ngang theo MaKhoa, phân mảnh dọc SinhVien\_HoSo; ghi tiêu chí phân mảnh | Nov 9, 2026 | Đã xong | `images/kien_truc_phan_tan.png` |
 | 4 | Tạo 5 database (4 node + CSDL tập trung) và các bảng ở từng node | Nov 10, 2026 | Đã xong | `database/01_create_databases.sql`, `database/02_create_tables.sql` |
 | 5 | Sinh dữ liệu mẫu có ý nghĩa, mỗi bảng chính tối thiểu 20 dòng mỗi khoa | Nov 11, 2026 | Đã xong | `database/03_seed_data.sql` |
 | 6 | Viết script chuyển dữ liệu từ CSDL tập trung sang các mảnh (INSERT…SELECT theo MaKhoa) và kiểm tra đủ, không trùng | Nov 12, 2026 | Đã xong | `database/04_fragmentation.sql` |
@@ -98,7 +98,7 @@ Kết thúc tuần, nhóm nộp file .zip đã chạy thử trên một máy kh�
 | 5 | App: ẩn/hiện chức năng theo vai trò đăng nhập | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 6 | Báo cáo mục 6–11 (tái thiết, 40 truy vấn, đối tượng CSDL, phân quyền, giao dịch, hiệu năng) | Nov 24, 2026 | Chưa làm | Báo cáo bản nháp 2 |
 | 7 | Báo cáo mục 12–14 (giao diện, kết quả kiểm thử, kết luận, bảng phân công) | Nov 25, 2026 | Chưa làm | `report/CSDLPT_DoAn_65131461.docx` |
-| 8 | README: cài đặt, thứ tự chạy script, sửa chuỗi kết nối, `pip install -r requirements.txt`, `streamlit run` | Nov 25, 2026 | Chưa làm | `README.md` |
+| 8 | README: cài đặt, thứ tự chạy script, sửa chuỗi kết nối, `pip install -r requirements.txt`, `streamlit run` | Nov 25, 2026 | Đã viết bản đầu | `README.md` |
 | 9 | Tập demo đủ 7 nội dung bắt buộc (mục 6 của đề); mỗi người nắm phần mình để vấn đáp | Nov 25, 2026 | Chưa làm | Kịch bản demo |
 | 10 | Giải nén file .zip, chạy lại từ đầu trên một máy khác | Nov 26, 2026 | Chưa làm | Xác nhận chạy được |
 | 11 | Đóng gói `CSDLPT_65131461_QLSinhVienPhanTan.zip` và nộp | Nov 27, 2026 | Chưa làm | File nộp |
