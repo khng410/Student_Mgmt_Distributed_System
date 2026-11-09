@@ -38,8 +38,10 @@ USE QLSV_TongHop;
 GO
 
 /* ---------- 0. PHẠM VI KHOA CỦA NGƯỜI ĐANG ĐĂNG NHẬP ----------
-   Giáo vụ từng khoa chỉ được xem thống kê của khoa mình; mọi tài khoản khác thấy cả 3 khoa.
+   Giáo vụ từng khoa chỉ được xem dữ liệu khoa mình; mọi tài khoản khác thấy cả 3 khoa.
    Dùng trong vw_SinhVien_ToanCuc và vw_DangKy_ToanCuc. Thêm giáo vụ mới: thêm một dòng vào VALUES.
+   THẤT BẠI AN TOÀN: thành viên của role rl_GiaoVu (tạo ở 10_security.sql) mà chưa có dòng trong VALUES
+   không thấy khoa nào, thay vì thấy tất cả.
    (Không đặt tên bắt đầu bằng fn_ để không lẫn vào 8 hàm của 08_functions.sql.) */
 CREATE OR ALTER FUNCTION dbo.PhamViKhoaCuaToi ()
 RETURNS TABLE
@@ -51,8 +53,9 @@ RETURN
     )
     SELECT k.MaKhoa
     FROM dbo.Khoa k
-    WHERE NOT EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME())
-       OR EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME() AND g.ma_khoa = k.MaKhoa)
+    WHERE EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME() AND g.ma_khoa = k.MaKhoa)
+       OR (ISNULL(IS_MEMBER(N'rl_GiaoVu'), 0) = 0                          -- chưa có role (chạy trước 10) hoặc không phải giáo vụ
+           AND NOT EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME()))
 );
 GO
 

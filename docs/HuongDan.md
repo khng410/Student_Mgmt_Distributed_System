@@ -165,7 +165,8 @@ FROM sys.sql_logins WHERE name = N'lg_giaovu_cntt';
 | Câu 4 | Lớp học phần khoa Ngoại ngữ có từ 10 sinh viên trở lên |
 | Câu 5 | 1 dòng: số đăng ký của khoa CNTT |
 | Câu 6 | 3 dòng (CNTT, DL, NN) với điểm trung bình |
-| Dòng cuối | Bảng ánh xạ đăng nhập của `LS_LOCAL` (`lg_daotao`) |
+| Bảng `sp_helplinkedsrvlogin` | 2 dòng ánh xạ: người chạy script và `lg_admin`, cùng đăng nhập từ xa bằng `lg_daotao` (không có dòng áp dụng cho mọi login) |
+| Dòng cuối | Bảng `Đúng: lg_bgh bị từ chối`: login khác không dùng được `LS_LOCAL` (nếu thấy `LỖI BẢO MẬT` thì ánh xạ đang quá rộng) |
 
 ### Kiểm tra thủ công thêm
 

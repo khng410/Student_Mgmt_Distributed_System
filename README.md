@@ -1,4 +1,4 @@
-# Quản lý sinh viên nhiều khoa – CSDL phân tán (SQL Server)
+﻿# Quản lý sinh viên nhiều khoa – CSDL phân tán (SQL Server)
 
 Đồ án cuối kỳ học phần Cơ sở dữ liệu phân tán. Dữ liệu sinh viên, giảng viên, lớp học phần và điểm của 3 khoa
 (Công nghệ thông tin, Ngoại ngữ, Du lịch) được phân tán ra nhiều node; ứng dụng và các view toàn cục cho phép
@@ -44,7 +44,7 @@ docs/       HuongDan.md: hướng dẫn chi tiết (đăng nhập, quyền hạn
 Nếu cần một SQL Server nhanh bằng Docker (đổi mật khẩu `<MatKhauManh>`):
 
 ```
-docker run -e ACCEPT_EULA=1 -e MSSQL_SA_PASSWORD=<MatKhauManh> -p 1433:1433 -d mcr.microsoft.com/azure-sql-edge
+docker run -e ACCEPT_EULA=1 -e MSSQL_SA_PASSWORD=<MatKhauManh> -p 127.0.0.1:1433:1433 -d mcr.microsoft.com/azure-sql-edge
 ```
 
 ## Cài đặt cơ sở dữ liệu
@@ -72,7 +72,7 @@ Chạy lại `02` thì phải chạy lại từ `03` đến `10` (và phần E2 
 
 ## Tài khoản
 
-Mật khẩu ở phần 1 của `database/10_security.sql` (chỉ dùng trên máy cá nhân, đổi trước khi dùng thật).
+Mật khẩu ở phần 1 của `database/10_security.sql`. **Đây là mật khẩu demo nằm trong mã nguồn:** chỉ dùng trên máy cá nhân; mở cổng SQL Server chỉ cho `127.0.0.1` (như lệnh Docker ở trên, không dùng `-p 1433:1433`), để repo ở chế độ private và đổi mật khẩu trước khi dùng thật (cách đổi: `docs/HuongDan.md`, mục 2.2).
 
 | Tài khoản | Vai trò | Quyền chính |
 | --- | --- | --- |

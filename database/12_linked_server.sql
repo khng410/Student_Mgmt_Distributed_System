@@ -10,6 +10,9 @@
    VÌ SAO LOOPBACK: cả 4 node đang là 4 database trên cùng một instance, nên Linked Server
    trỏ về chính nó. Với instance thứ hai thật, chỉ cần đổi @datasrc trong phần 1.
 
+   QUYỀN DÙNG: chỉ người chạy script và lg_admin được ánh xạ tới LS_LOCAL; các login khác không dùng được
+   (cuối file có kiểm tra bằng lg_bgh). Muốn cho thêm login nào, thêm một sp_addlinkedsrvlogin riêng cho login đó.
+
    KẾT NỐI: LS_LOCAL đăng nhập lại bằng SQL login lg_daotao (Phòng Đào tạo) nên cần SQL Server
    bật chế độ đăng nhập hỗn hợp (xem docs/HuongDan.md, mục 1.2). Nếu không bật được,
    dùng thay thế: sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'TRUE'
@@ -28,7 +31,7 @@ GO
 /* =====================================================================
    PHẦN 1. TẠO LINKED SERVER – thử lần lượt các provider cho đến khi kết nối được
    ===================================================================== */
-DECLARE @srv SYSNAME = @@SERVERNAME, @prov SYSNAME, @ok BIT = 0;
+DECLARE @srv SYSNAME = @@SERVERNAME, @prov SYSNAME, @ok BIT = 0, @nguoiChay SYSNAME = SUSER_SNAME();
 DECLARE c CURSOR LOCAL FAST_FORWARD FOR
     SELECT prov FROM (VALUES (1, N'MSOLEDBSQL19'), (2, N'MSOLEDBSQL'), (3, N'SQLNCLI11')) v(thu_tu, prov)
     ORDER BY thu_tu;
@@ -43,8 +46,13 @@ BEGIN
         EXEC sp_addlinkedserver @server = N'LS_LOCAL', @srvproduct = N'', @provider = @prov,
              @datasrc = @srv, @provstr = N'TrustServerCertificate=yes';
         EXEC sp_serveroption @server = N'LS_LOCAL', @optname = N'rpc out', @optvalue = N'true';
-        EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = NULL,
+        -- Chỉ ÁNH XẠ cho người chạy script (thường là sysadmin) và lg_admin. KHÔNG dùng @locallogin = NULL:
+        -- NULL nghĩa là mọi login đều đi qua Linked Server với quyền của lg_daotao (qua mặt DENY và phạm vi khoa).
+        EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = @nguoiChay,
              @rmtuser = N'lg_daotao', @rmtpassword = N'Xe9$Lm47#2026p';
+        IF @nguoiChay <> N'lg_admin'
+            EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = N'lg_admin',
+                 @rmtuser = N'lg_daotao', @rmtpassword = N'Xe9$Lm47#2026p';
 
         EXEC sp_testlinkedserver N'LS_LOCAL';       -- lỗi nếu provider thiếu hoặc đăng nhập sai
         SET @ok = 1;
@@ -130,6 +138,18 @@ GROUP BY x.TenKhoa
 ORDER BY x.TenKhoa;
 GO
 
--- Thông tin đăng nhập của Linked Server (bằng chứng cấu hình)
+-- Thông tin đăng nhập của Linked Server (bằng chứng cấu hình): chỉ có 2 dòng ánh xạ, không có dòng áp dụng cho mọi login
 EXEC sp_helplinkedsrvlogin @rmtsrvname = N'LS_LOCAL';
+GO
+
+-- Kiểm tra bảo mật: login khác KHÔNG dùng được LS_LOCAL (kết quả mong đợi: bị từ chối)
+EXECUTE AS LOGIN = 'lg_bgh';
+BEGIN TRY
+    SELECT * FROM OPENQUERY(LS_LOCAL, 'SELECT 1 AS x');
+    SELECT N'LỖI BẢO MẬT: lg_bgh dùng được LS_LOCAL' AS KetQua;
+END TRY
+BEGIN CATCH
+    SELECT N'Đúng: lg_bgh bị từ chối' AS KetQua, ERROR_MESSAGE() AS ThongBao;
+END CATCH
+REVERT;
 GO
