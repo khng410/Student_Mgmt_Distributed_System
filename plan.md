@@ -91,7 +91,7 @@ Kết thúc tuần, nhóm nộp file .zip đã chạy thử trên một máy kh�
 
 | # | Việc | Hạn | Trạng thái | Kết quả |
 | --- | --- | --- | --- | --- |
-| 1 | Hiệu năng: chạy 1–2 truy vấn với STATISTICS IO/TIME và Actual Execution Plan, trước và sau khi tạo index (ví dụ `DangKy(MaSV)`); ghi nhận xét | Nov 22, 2026 | Chưa làm | Ảnh plan + nhận xét |
+| 1 | Hiệu năng: chạy 1–2 truy vấn với STATISTICS IO/TIME và Actual Execution Plan, trước và sau khi tạo index (ví dụ `DangKy(MaSV)`); ghi nhận xét | Nov 22, 2026 | Script đã chạy thử; còn chụp ảnh plan | `database/11_transactions_concurrency.sql` (phần E), ảnh plan + nhận xét |
 | 2 | App: trang tìm kiếm/lọc sinh viên và điểm qua VIEW toàn cục | Nov 22, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 3 | App: dashboard thống kê toàn trường và theo khoa (sĩ số, điểm TB, xếp loại) | Nov 23, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 4 | App: trang “Phân tán” — chọn node để xem dữ liệu, so với VIEW toàn cục, nút chạy transaction COMMIT/ROLLBACK | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
