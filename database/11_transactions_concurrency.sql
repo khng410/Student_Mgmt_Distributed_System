@@ -214,7 +214,7 @@ DROP TABLE #PerfDangKy;
 GO
 
 /* =====================================================================
-   NHẬN XÉT (viết lại theo số liệu của bạn khi đưa vào báo cáo, mục 11)
+   NHẬN XÉT (viết lại theo số liệu của bạn khi đưa vào báo cáo, mục 10)
    Ví dụ đã đo: A trước = 1753 logical reads (Clustered Index Scan); B = 3; A sau = 3 (Index Seek).
    ---------------------------------------------------------------------
    1. Truy vấn A lọc theo MaLHP. Khóa chính (MaSV, MaLHP) sắp xếp theo MaSV trước, nên MaLHP không

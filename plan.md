@@ -60,7 +60,7 @@ Kết thúc tuần, 4 database chạy được từ script, có dữ liệu mẫ
 | 6 | Viết script chuyển dữ liệu từ CSDL tập trung sang các mảnh (INSERT…SELECT theo MaKhoa) và kiểm tra đủ, không trùng | Nov 12, 2026 | Đã xong | `database/04_fragmentation.sql` |
 | 7 | Tạo VIEW toàn cục (UNION ALL) và VIEW tái thiết mảnh dọc (JOIN) | Nov 12, 2026 | Đã xong | `database/05_views.sql` |
 | 8 | Dựng khung app Streamlit, kết nối pyodbc tới QLSV\_TongHop, trang đăng nhập | Nov 13, 2026 | Đã xong (đã thử với SQL Server) | `app/` chạy được |
-| 9 | Viết báo cáo mục 1–5 (bìa, giới thiệu, phân tích yêu cầu, thiết kế tập trung, thiết kế phân tán) | Nov 13, 2026 | Chưa làm | Báo cáo bản nháp 1 |
+| 9 | Viết báo cáo: bìa và mục 1–4 (giới thiệu, phân tích yêu cầu, thiết kế tập trung, thiết kế phân tán) | Nov 13, 2026 | Đã xong (đã chèn ảnh) | Báo cáo bản nháp 1 |
 | 10 | Họp mốc 1: chạy lại script 01–05 trên một máy sạch | Nov 13, 2026 | Chưa làm | Biên bản ngắn |
 
 Mẹo: tạo thêm một database `QLSV_TapTrung` chứa bản thiết kế tập trung trước, rồi tách sang các node. Cách này cho thấy rõ bước “chuyển từ tập trung sang phân tán” mà đề yêu cầu.
@@ -96,8 +96,8 @@ Kết thúc tuần, nhóm nộp file .zip đã chạy thử trên một máy kh�
 | 3 | App: dashboard thống kê toàn trường và theo khoa (sĩ số, điểm TB, xếp loại) | Nov 23, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 4 | App: trang “Phân tán” — chọn node để xem dữ liệu, so với VIEW toàn cục, nút chạy transaction COMMIT/ROLLBACK | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
 | 5 | App: ẩn/hiện chức năng theo vai trò đăng nhập | Nov 24, 2026 | Đã xong (đã thử với SQL Server) | `app/` |
-| 6 | Báo cáo mục 6–11 (tái thiết, 40 truy vấn, đối tượng CSDL, phân quyền, giao dịch, hiệu năng) | Nov 24, 2026 | Chưa làm | Báo cáo bản nháp 2 |
-| 7 | Báo cáo mục 12–14 (giao diện, kết quả kiểm thử, kết luận, bảng phân công) | Nov 25, 2026 | Chưa làm | `report/CSDLPT_DoAn_65131461.docx` |
+| 6 | Báo cáo mục 5–10 (tái thiết, 40 truy vấn, đối tượng CSDL, phân quyền, giao dịch, hiệu năng) | Nov 24, 2026 | Đã xong (đã chèn ảnh) | Báo cáo bản nháp 2 |
+| 7 | Báo cáo mục 11–13 (giao diện, kết quả kiểm thử, kết luận, bảng phân công) | Nov 25, 2026 | Đã xong (đã chèn ảnh) | `report/CSDLPT_DoAn_65131461.docx` |
 | 8 | README: cài đặt, thứ tự chạy script, sửa chuỗi kết nối, `pip install -r requirements.txt`, `streamlit run` | Nov 25, 2026 | Đã viết bản đầu | `README.md` |
 | 9 | Tập demo đủ 7 nội dung bắt buộc (mục 6 của đề); mỗi người nắm phần mình để vấn đáp | Nov 25, 2026 | Chưa làm | Kịch bản demo |
 | 10 | Giải nén file .zip, chạy lại từ đầu trên một máy khác | Nov 26, 2026 | Chưa làm | Xác nhận chạy được |
