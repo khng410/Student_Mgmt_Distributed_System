@@ -595,7 +595,8 @@ GO
    Thêm 1 sinh viên demo (99999999) vào 2 database trong 1 transaction.
      @GayLoi = 0 : cả hai lệnh thành công -> COMMIT, thấy dữ liệu ở cả node CNTT lẫn TongHop.
      @GayLoi = 1 : lệnh thứ hai cố ý lỗi (trùng CCCD) -> ROLLBACK, lệnh thứ nhất cũng bị hủy.
-   @DonDep = 1 : xóa sinh viên demo sau khi đã ghi kết quả, để dữ liệu mẫu không đổi. */
+   @DonDep = 1 : xóa sinh viên demo sau khi đã ghi kết quả, để dữ liệu mẫu không đổi.
+   Mã 99999999 được dành riêng cho demo: trg_SinhVien_GhiNhatKy và trg_HoSo_GhiNhatKy (09) bỏ qua mã này. */
 CREATE OR ALTER PROCEDURE dbo.sp_DemoGiaoDich
     @GayLoi  BIT = 0,
     @DonDep  BIT = 1

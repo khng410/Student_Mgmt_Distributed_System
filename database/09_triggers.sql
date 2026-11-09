@@ -1,9 +1,9 @@
 ﻿/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
    File   : 09_triggers.sql
-   Mục đích: 5 trigger kiểm soát dữ liệu và ghi log. Trigger là đối tượng của TỪNG database,
-             nên 4 trigger của node khoa được cài vào cả 3 node (QLSV_CNTT, QLSV_NgoaiNgu,
-             QLSV_DuLich) và 1 trigger cài ở QLSV_TongHop.
+   Mục đích: 7 trigger kiểm soát dữ liệu và ghi log. Trigger là đối tượng của TỪNG database,
+             nên 5 trigger của node khoa được cài vào cả 3 node (QLSV_CNTT, QLSV_NgoaiNgu,
+             QLSV_DuLich) và 2 trigger cài ở QLSV_TongHop.
    Người viết: ...............          Ngày: ..../11/2026
    Chạy sau : 08_functions.sql            Chạy lại nhiều lần được (CREATE OR ALTER).
 
@@ -14,6 +14,14 @@
    4  trg_HoSo_KiemTraSinhVien         SinhVien_HoSo (TongHop)    AFTER INSERT,UPDATE MaSV phải có ở một node khoa (thay cho FK
                                                                                       liên database, SQL Server không hỗ trợ)
    5  trg_DangKy_KiemTraDangKy         DangKy (3 node)            AFTER INSERT        chỉ SV đang học, không vượt sĩ số tối đa
+   6  trg_SinhVien_GhiNhatKy           SinhVien (3 node)          AFTER INSERT,UPDATE,DELETE
+                                                                                      ghi NhatKy khi thêm / sửa / xóa / chuyển khoa
+   7  trg_HoSo_GhiNhatKy               SinhVien_HoSo (TongHop)    AFTER INSERT,UPDATE,DELETE
+                                                                                      ghi NhatKy hồ sơ cá nhân (CCCD, điện thoại chỉ
+                                                                                      ghi 4 / 3 số cuối)
+   Trigger 6 và 7 bỏ qua mã sinh viên 99999999, mã dành riêng cho sp_DemoGiaoDich, để dữ liệu demo không
+   làm rối nhật ký (cố định theo mã, không có cờ nào để người dùng tự tắt nhật ký).
+   Chuyển khoa hiện thành DELETE ở node cũ + INSERT ở node mới.
 
    Trigger chặn lỗi dùng ROLLBACK TRANSACTION rồi THROW (mã 50901-50905). Khi bắt lỗi ở
    TRY...CATCH nhớ kiểm tra @@TRANCOUNT trước khi ROLLBACK, vì trigger đã hủy transaction.
@@ -47,6 +55,32 @@ BEGIN
         ROLLBACK TRANSACTION;
         THROW 50905, N'Mã sinh viên chưa có ở node khoa nào: hồ sơ phải đi cùng một sinh viên.', 1;
     END
+END
+GO
+
+
+CREATE OR ALTER TRIGGER dbo.trg_HoSo_GhiNhatKy
+ON dbo.SinhVien_HoSo
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT dbo.NhatKy (TenBang, HanhDong, KhoaChinh, NoiDungCu, NoiDungMoi)
+    SELECT N'SinhVien_HoSo',
+           CASE WHEN d.MaSV IS NULL THEN 'INSERT' WHEN i.MaSV IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
+           COALESCE(i.MaSV, d.MaSV),
+           CASE WHEN d.MaSV IS NULL THEN NULL
+                ELSE CONCAT(N'CCCD=***', RIGHT(d.CCCD, 4), N'; DienThoai=***', RIGHT(d.DienThoai, 3),
+                            N'; Email=', d.Email, N'; DiaChi=', d.DiaChi) END,
+           CASE WHEN i.MaSV IS NULL THEN NULL
+                ELSE CONCAT(N'CCCD=***', RIGHT(i.CCCD, 4), N'; DienThoai=***', RIGHT(i.DienThoai, 3),
+                            N'; Email=', i.Email, N'; DiaChi=', i.DiaChi) END
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.MaSV = i.MaSV
+    WHERE COALESCE(i.MaSV, d.MaSV) <> '99999999'                 -- mã dành riêng cho sp_DemoGiaoDich
+      AND (i.MaSV IS NULL OR d.MaSV IS NULL
+           OR NOT EXISTS (SELECT d.CCCD, d.DienThoai, d.Email, d.DiaChi
+                          INTERSECT SELECT i.CCCD, i.DienThoai, i.Email, i.DiaChi));
 END
 GO
 
@@ -132,6 +166,31 @@ BEGIN
         ROLLBACK TRANSACTION;
         THROW 50904, N~Lớp học phần đã vượt sĩ số tối đa.~, 1;
     END
+END'),
+
+(N'trg_SinhVien_GhiNhatKy', N'
+CREATE OR ALTER TRIGGER dbo.trg_SinhVien_GhiNhatKy
+ON dbo.SinhVien
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT dbo.NhatKy (TenBang, HanhDong, KhoaChinh, NoiDungCu, NoiDungMoi)
+    SELECT N~SinhVien~,
+           CASE WHEN d.MaSV IS NULL THEN ~INSERT~ WHEN i.MaSV IS NULL THEN ~DELETE~ ELSE ~UPDATE~ END,
+           COALESCE(i.MaSV, d.MaSV),
+           CASE WHEN d.MaSV IS NULL THEN NULL
+                ELSE CONCAT(N~HoTen=~, d.HoTen, N~; NgaySinh=~, CONVERT(NVARCHAR(10), d.NgaySinh, 23),
+                            N~; GioiTinh=~, d.GioiTinh, N~; MaLop=~, d.MaLop, N~; TrangThai=~, d.TrangThai) END,
+           CASE WHEN i.MaSV IS NULL THEN NULL
+                ELSE CONCAT(N~HoTen=~, i.HoTen, N~; NgaySinh=~, CONVERT(NVARCHAR(10), i.NgaySinh, 23),
+                            N~; GioiTinh=~, i.GioiTinh, N~; MaLop=~, i.MaLop, N~; TrangThai=~, i.TrangThai) END
+    FROM inserted i
+    FULL OUTER JOIN deleted d ON d.MaSV = i.MaSV
+    WHERE COALESCE(i.MaSV, d.MaSV) <> ~99999999~                 -- mã dành riêng cho sp_DemoGiaoDich
+      AND (i.MaSV IS NULL OR d.MaSV IS NULL
+           OR NOT EXISTS (SELECT d.HoTen, d.NgaySinh, d.GioiTinh, d.MaLop, d.TrangThai
+                          INTERSECT SELECT i.HoTen, i.NgaySinh, i.GioiTinh, i.MaLop, i.TrangThai));
 END');
 
 DECLARE @db SYSNAME, @noi NVARCHAR(MAX), @sql NVARCHAR(MAX), @exec NVARCHAR(300);
@@ -152,7 +211,7 @@ CLOSE c;
 DEALLOCATE c;
 GO
 
--- Kiểm tra cài đặt: 1 trigger ở TongHop + 4 trigger x 3 node = 13 đối tượng, 5 loại trigger
+-- Kiểm tra cài đặt: 2 trigger ở TongHop + 5 trigger x 3 node = 17 đối tượng, 7 loại trigger
 SELECT db, ten AS Trigger_, bang AS TrenBang
 FROM (
     SELECT N'QLSV_TongHop' AS db, name AS ten, OBJECT_NAME(parent_id, DB_ID(N'QLSV_TongHop')) AS bang FROM QLSV_TongHop.sys.triggers
@@ -245,4 +304,30 @@ BEGIN CATCH
 END CATCH
 SELECT N'Sau lỗi: sĩ số tối đa đã trở lại' AS KiemTra, SiSoToiDa
 FROM QLSV_CNTT.dbo.LopHocPhan WHERE MaLHP = 'CNTT110-HK1-2627-01';   -- không còn là 10
+GO
+
+-- Trigger 6 và 7: trg_SinhVien_GhiNhatKy + trg_HoSo_GhiNhatKy. Thêm, sửa, chuyển khoa, xóa một sinh viên thử:
+--   NhatKy ở node CNTT, node Ngoại ngữ và TongHop mỗi nơi có các dòng tương ứng (rồi ROLLBACK).
+--   Chuyển khoa = DELETE ở node cũ (CNTT) + INSERT ở node mới (NN); CCCD và điện thoại trong nhật ký chỉ có số cuối.
+BEGIN TRAN;
+    INSERT QLSV_CNTT.dbo.SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, MaLop)
+    VALUES ('99999996', N'Sinh Viên Nhật Ký', '2006-01-01', N'Nam', '66.CNTT-1');
+    INSERT dbo.SinhVien_HoSo (MaSV, CCCD, DienThoai, Email, DiaChi)
+    VALUES ('99999996', '000000000096', '0987654321', 'nk99999996@sv.qlsv.edu.vn', N'Hà Nội');
+    UPDATE QLSV_CNTT.dbo.SinhVien SET HoTen = N'Sinh Viên Nhật Ký (sửa)' WHERE MaSV = '99999996';
+    UPDATE dbo.SinhVien_HoSo SET DiaChi = N'Hải Phòng' WHERE MaSV = '99999996';
+    EXEC dbo.sp_ChuyenKhoa @MaSV = '99999996', @MaLopMoi = '66.NN-1';
+    DELETE FROM dbo.SinhVien_HoSo WHERE MaSV = '99999996';
+    DELETE FROM QLSV_NgoaiNgu.dbo.SinhVien WHERE MaSV = '99999996';
+
+    SELECT Node, MaNK, TenBang, HanhDong, NoiDungCu, NoiDungMoi FROM (
+        SELECT N'QLSV_CNTT' AS Node, MaNK, TenBang, HanhDong, NoiDungCu, NoiDungMoi FROM QLSV_CNTT.dbo.NhatKy WHERE KhoaChinh = '99999996'
+        UNION ALL SELECT N'QLSV_NgoaiNgu', MaNK, TenBang, HanhDong, NoiDungCu, NoiDungMoi FROM QLSV_NgoaiNgu.dbo.NhatKy WHERE KhoaChinh = '99999996'
+        UNION ALL SELECT N'QLSV_TongHop', MaNK, TenBang, HanhDong, NoiDungCu, NoiDungMoi FROM dbo.NhatKy WHERE KhoaChinh = '99999996'
+    ) x ORDER BY Node, MaNK;
+ROLLBACK TRAN;
+SELECT N'Sau ROLLBACK: số dòng nhật ký của sinh viên thử' AS KiemTra,
+       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.NhatKy WHERE KhoaChinh = '99999996')
+     + (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.NhatKy WHERE KhoaChinh = '99999996')
+     + (SELECT COUNT(*) FROM dbo.NhatKy WHERE KhoaChinh = '99999996') AS SoDong;   -- = 0
 GO

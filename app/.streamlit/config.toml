@@ -1,0 +1,12 @@
+# Giao diện của ứng dụng (Streamlit đọc file này khi chạy trong thư mục app/)
+[theme]
+base = "light"
+primaryColor = "#2563eb"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#eef2ff"
+textColor = "#0f172a"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#e0e7ff"
+secondaryBackgroundColor = "#c7d2fe"
