@@ -18,6 +18,11 @@
    4  vw_BangDiem              BÁO CÁO             bảng điểm chi tiết toàn trường
    5  vw_ThongKe_Khoa_HocKy    BÁO CÁO             thống kê theo khoa và học kỳ
 
+   Phạm vi khoa: vw_SinhVien_ToanCuc và vw_DangKy_ToanCuc chỉ trả khoa của giáo vụ đang đăng nhập,
+   qua hàm dbo.PhamViKhoaCuaToi() (mục 0). Các view còn lại (vw_SinhVien_DayDu, vw_BangDiem,
+   vw_ThongKe_Khoa_HocKy) đọc từ hai view đó nên tự bị lọc theo. Tài khoản khác thấy cả 3 khoa.
+   Dùng CREATE OR ALTER nên chạy lại file này không làm mất quyền GRANT đã cấp ở 10_security.sql.
+
    Quy ước điểm: DiemTK = NULL khi chưa đủ DiemQT và DiemThi -> "Chưa có điểm",
    không tính vào điểm trung bình.
 
@@ -31,12 +36,28 @@ SET QUOTED_IDENTIFIER ON;
 GO
 USE QLSV_TongHop;
 GO
-DROP VIEW IF EXISTS dbo.vw_ThongKe_Khoa_HocKy, dbo.vw_BangDiem, dbo.vw_DangKy_ToanCuc,
-                    dbo.vw_SinhVien_DayDu, dbo.vw_SinhVien_ToanCuc;
+
+/* ---------- 0. PHẠM VI KHOA CỦA NGƯỜI ĐANG ĐĂNG NHẬP ----------
+   Giáo vụ từng khoa chỉ được xem thống kê của khoa mình; mọi tài khoản khác thấy cả 3 khoa.
+   Dùng trong vw_SinhVien_ToanCuc và vw_DangKy_ToanCuc. Thêm giáo vụ mới: thêm một dòng vào VALUES.
+   (Không đặt tên bắt đầu bằng fn_ để không lẫn vào 8 hàm của 08_functions.sql.) */
+CREATE OR ALTER FUNCTION dbo.PhamViKhoaCuaToi ()
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH g (tai_khoan, ma_khoa) AS (
+        SELECT * FROM (VALUES (N'lg_giaovu_cntt', 'CNTT'), (N'lg_giaovu_nn', 'NN'), (N'lg_giaovu_dl', 'DL')) v (a, b)
+    )
+    SELECT k.MaKhoa
+    FROM dbo.Khoa k
+    WHERE NOT EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME())
+       OR EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME() AND g.ma_khoa = k.MaKhoa)
+);
 GO
 
 /* ---------- 1. VIEW TOÀN CỤC: sinh viên của cả trường ---------- */
-CREATE VIEW dbo.vw_SinhVien_ToanCuc
+CREATE OR ALTER VIEW dbo.vw_SinhVien_ToanCuc
 AS
 SELECT s.MaSV, s.HoTen, s.NgaySinh, s.GioiTinh, s.MaLop, s.TenLop,
        s.MaKhoa, k.TenKhoa, s.TrangThai
@@ -50,11 +71,12 @@ FROM (
     SELECT sv.MaSV, sv.HoTen, sv.NgaySinh, sv.GioiTinh, sv.MaLop, l.TenLop, l.MaKhoa, sv.TrangThai
     FROM QLSV_DuLich.dbo.SinhVien sv   JOIN QLSV_DuLich.dbo.Lop l   ON l.MaLop = sv.MaLop
 ) s
-JOIN dbo.Khoa k ON k.MaKhoa = s.MaKhoa;
+JOIN dbo.Khoa k ON k.MaKhoa = s.MaKhoa
+WHERE s.MaKhoa IN (SELECT MaKhoa FROM dbo.PhamViKhoaCuaToi());      -- giáo vụ chỉ thấy khoa mình
 GO
 
 /* ---------- 2. VIEW TÁI THIẾT mảnh dọc: ghép học vụ + hồ sơ ---------- */
-CREATE VIEW dbo.vw_SinhVien_DayDu
+CREATE OR ALTER VIEW dbo.vw_SinhVien_DayDu
 AS
 SELECT s.MaSV, s.HoTen, s.NgaySinh, s.GioiTinh, s.MaLop, s.TenLop, s.MaKhoa, s.TenKhoa, s.TrangThai,
        h.CCCD, h.DienThoai, h.Email, h.DiaChi
@@ -63,7 +85,7 @@ JOIN dbo.SinhVien_HoSo h ON h.MaSV = s.MaSV;
 GO
 
 /* ---------- 3. VIEW TOÀN CỤC: đăng ký học phần và điểm ---------- */
-CREATE VIEW dbo.vw_DangKy_ToanCuc
+CREATE OR ALTER VIEW dbo.vw_DangKy_ToanCuc
 AS
 SELECT d.MaSV, d.MaLHP, d.MaMH, m.TenMH, m.SoTinChi, d.MaHK, d.Nhom, d.MaGV,
        d.MaKhoa, d.NgayDangKy, d.DiemQT, d.DiemThi, d.DiemTK
@@ -80,11 +102,12 @@ FROM (
            dk.NgayDangKy, dk.DiemQT, dk.DiemThi, dk.DiemTK
     FROM QLSV_DuLich.dbo.DangKy dk   JOIN QLSV_DuLich.dbo.LopHocPhan lp   ON lp.MaLHP = dk.MaLHP
 ) d
-JOIN dbo.MonHoc m ON m.MaMH = d.MaMH;
+JOIN dbo.MonHoc m ON m.MaMH = d.MaMH
+WHERE d.MaKhoa IN (SELECT MaKhoa FROM dbo.PhamViKhoaCuaToi());      -- giáo vụ chỉ thấy khoa mình
 GO
 
 /* ---------- 4. VIEW BÁO CÁO: bảng điểm chi tiết ---------- */
-CREATE VIEW dbo.vw_BangDiem
+CREATE OR ALTER VIEW dbo.vw_BangDiem
 AS
 SELECT s.MaSV, s.HoTen, s.TenLop, s.MaKhoa, s.TenKhoa,
        d.MaHK, d.MaLHP, d.MaMH, d.TenMH, d.SoTinChi,
@@ -97,7 +120,7 @@ JOIN dbo.vw_SinhVien_ToanCuc s ON s.MaSV = d.MaSV;
 GO
 
 /* ---------- 5. VIEW BÁO CÁO: thống kê theo khoa và học kỳ ---------- */
-CREATE VIEW dbo.vw_ThongKe_Khoa_HocKy
+CREATE OR ALTER VIEW dbo.vw_ThongKe_Khoa_HocKy
 AS
 SELECT MaKhoa, TenKhoa, MaHK,
        COUNT(DISTINCT MaSV)  AS SoSinhVien,

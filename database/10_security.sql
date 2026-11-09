@@ -239,7 +239,8 @@ END CATCH
 REVERT;
 GO
 
--- Ca 4 (BỊ TỪ CHỐI): giáo vụ CNTT nhập điểm cho sinh viên khoa Ngoại ngữ -> không có quyền UPDATE ở node NN.
+-- Ca 4 (BỊ TỪ CHỐI): giáo vụ CNTT nhập điểm cho sinh viên khoa Ngoại ngữ -> không thấy sinh viên đó (lọc theo khoa);
+--   nếu vượt được lớp lọc này vẫn bị chặn tiếp vì không có quyền UPDATE ở node NN.
 EXECUTE AS LOGIN = 'lg_giaovu_cntt';
 BEGIN TRY
     BEGIN TRAN;
@@ -319,7 +320,22 @@ END CATCH
 REVERT;
 GO
 
--- Ca 11 (ĐƯỢC PHÉP): quản trị viên xem mọi thứ.
+-- Ca 11 (PHẠM VI KHOA): giáo vụ CNTT chỉ thấy dữ liệu khoa CNTT ở mọi view, hàm và thủ tục.
+EXECUTE AS LOGIN = 'lg_giaovu_cntt';
+BEGIN TRY
+    SELECT N'vw_SinhVien_ToanCuc' AS Nguon, MaKhoa, COUNT(*) AS SoDong FROM dbo.vw_SinhVien_ToanCuc GROUP BY MaKhoa;    -- chỉ CNTT
+    SELECT N'vw_ThongKe_Khoa_HocKy' AS Nguon, MaKhoa, COUNT(*) AS SoDong FROM dbo.vw_ThongKe_Khoa_HocKy GROUP BY MaKhoa; -- chỉ CNTT
+    EXEC dbo.sp_ThongKeKhoa @MaKhoa = 'NN';                     -- khoa khác -> rỗng
+    EXEC dbo.sp_TimSinhVien @MaKhoa = 'NN';                     -- khoa khác -> rỗng
+    EXEC dbo.sp_BangDiemSinhVien @MaSV = '24020001';            -- sinh viên khoa khác -> lỗi "Không tìm thấy sinh viên"
+END TRY
+BEGIN CATCH
+    SELECT ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao;
+END CATCH
+REVERT;
+GO
+
+-- Ca 12 (ĐƯỢC PHÉP): quản trị viên xem mọi thứ.
 EXECUTE AS LOGIN = 'lg_admin';
     SELECT SUSER_NAME() AS DangNhapVoi, COUNT(*) AS SoSinhVienCoHoSo FROM dbo.vw_SinhVien_DayDu;
 REVERT;

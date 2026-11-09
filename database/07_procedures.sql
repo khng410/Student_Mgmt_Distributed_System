@@ -357,6 +357,7 @@ GO
 
 /* ---------- 7. sp_ThongKeKhoa ----------
    Phân bố học lực theo khoa. Cả hai tham số NULL = toàn trường, mọi học kỳ.
+   Giáo vụ chỉ thấy khoa của mình dù truyền @MaKhoa nào: vw_BangDiem đã lọc theo dbo.PhamViKhoaCuaToi (05_views.sql).
    Thang: Giỏi >= 8; Khá >= 6,5; Trung bình >= 5; Yếu >= 4; Không đạt < 4. */
 CREATE OR ALTER PROCEDURE dbo.sp_ThongKeKhoa
     @MaKhoa  VARCHAR(10) = NULL,
