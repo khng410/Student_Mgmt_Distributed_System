@@ -9,45 +9,39 @@ Tài liệu gộp các hướng dẫn của đồ án. Mật khẩu các tài kh
 3. [Kiểm tra Linked Server](#3-kiểm-tra-linked-server)
 4. [Đo hiệu năng và index](#4-đo-hiệu-năng-và-index)
 5. [Chụp ảnh demo cho báo cáo (60 ảnh)](#5-chụp-ảnh-demo-cho-báo-cáo-60-ảnh)
+6. [Demo cho giảng viên: hàm, thủ tục, trigger, giao dịch, Linked Server](#6-demo-cho-giảng-viên-hàm-thủ-tục-trigger-giao-dịch-linked-server)
 
 ---
 
 ## 1. Đăng nhập thử bằng tài khoản của hệ thống
 
 Dùng để kiểm tra các tài khoản tạo trong `database/10_security.sql` có đăng nhập được và đúng quyền không.
-Mật khẩu của từng tài khoản nằm trong phần 1 của `10_security.sql`.
+Mật khẩu dưới đây lấy từ phần 1 của `10_security.sql`. **Đây là mật khẩu demo**, chỉ dùng trên máy cá nhân; đổi mật khẩu
+(mục 2.2) thì sửa cả bảng này. Mật khẩu `sa` không nằm ở đây mà ở file `.env`.
 
-| Login | Vai trò |
-| --- | --- |
-| `lg_admin` | Quản trị |
-| `lg_daotao` | Phòng Đào tạo |
-| `lg_giaovu_cntt`, `lg_giaovu_nn`, `lg_giaovu_dl` | Giáo vụ khoa CNTT, Ngoại ngữ, Du lịch |
-| `lg_bgh` | Ban giám hiệu |
+| Login | Vai trò | Mật khẩu |
+| --- | --- | --- |
+| `lg_admin` | Quản trị | `Tr0ng#Zq81!2026` |
+| `lg_daotao` | Phòng Đào tạo | `Xe9$Lm47#2026p` |
+| `lg_giaovu_cntt` | Giáo vụ khoa CNTT | `Bv3@Rt62$2026k` |
+| `lg_giaovu_nn` | Giáo vụ khoa Ngoại ngữ | `Hw7#Ny15@2026c` |
+| `lg_giaovu_dl` | Giáo vụ khoa Du lịch | `Pk4$Jd88#2026m` |
+| `lg_bgh` | Ban giám hiệu | `Fz2@Qs59$2026t` |
 
 ### 1.1. Đăng nhập
 
 1. Trong SSMS bấm **Connect → Database Engine**.
 2. Điền:
-   - **Server name:** tên máy chủ bạn vẫn dùng (ví dụ `localhost` hoặc `localhost\SQLEXPRESS`).
+   - **Server name:** `localhost,14330` (instance điều phối). Muốn xem một node khoa: `localhost,14331` (CNTT), `14332` (Ngoại ngữ), `14333` (Du lịch).
    - **Authentication:** **SQL Server Authentication** (không chọn Windows Authentication).
    - **Login / Password:** tài khoản và mật khẩu cần thử.
 3. Bấm **Connect**. Nên mở kết nối này tách riêng với kết nối quản trị của bạn.
 
 Nếu SSMS báo `The certificate chain was issued by an authority that is not trusted`, bấm **Options >>** ở hộp thoại Connect và đánh dấu **Trust server certificate**.
 
-### 1.2. Lỗi `Login failed` (18456, state 58): máy chủ chỉ cho Windows Authentication
+### 1.2. Lỗi `Login failed` (18456)
 
-Kiểm tra bằng kết nối quản trị:
-
-```sql
-SELECT SERVERPROPERTY('IsIntegratedSecurityOnly');   -- 1 = chỉ Windows, 0 = đã bật hỗn hợp
-```
-
-Nếu kết quả là 1, bật chế độ hỗn hợp:
-
-1. Object Explorer: chuột phải tên máy chủ → **Properties → Security**.
-2. Chọn **SQL Server and Windows Authentication mode** → OK.
-3. Khởi động lại dịch vụ SQL Server (chuột phải tên máy chủ → **Restart**).
+SQL Server trong Docker đã bật sẵn đăng nhập SQL. Nếu vẫn lỗi `Login failed`, kiểm tra các nguyên nhân dưới đây. Lỗi 18456 state 58 (chỉ cho Windows Authentication) không xảy ra với các container này.
 
 Các nguyên nhân khác: sai mật khẩu, login bị khóa (`is_disabled = 1`), chưa chạy `10_security.sql`.
 
@@ -112,14 +106,17 @@ ALTER LOGIN lg_giaovu_cntt WITH PASSWORD = N'MatKhauMoi#2026a', OLD_PASSWORD = N
 Việc đi kèm sau khi đổi:
 
 - **Sửa mật khẩu trong `10_security.sql`.** Chạy lại file này không đặt lại mật khẩu cho login đã tồn tại, nên file chỉ là ghi chép; nên sửa cho khớp.
-- **Nếu đổi mật khẩu `lg_daotao`**, Linked Server `LS_LOCAL` sẽ không đăng nhập được vì `12_linked_server.sql` lưu mật khẩu cũ. Cập nhật:
+- **Mỗi login có mặt ở cả 4 instance** và Linked Server lưu mật khẩu của nó (ánh xạ login điều phối → login cùng tên ở node). Đổi mật khẩu thì phải đổi ở node và ánh xạ. Ví dụ với `lg_daotao` và node CNTT:
 
   ```sql
-  EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = NULL,
+  -- (1) ở node (cổng 14331): đổi mật khẩu login
+  ALTER LOGIN lg_daotao WITH PASSWORD = N'MatKhauMoi#2026a';
+  -- (2) ở điều phối (cổng 14330): cập nhật ánh xạ cho từng Linked Server
+  EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_QLSV_CNTT', @useself = N'FALSE', @locallogin = N'lg_daotao',
        @rmtuser = N'lg_daotao', @rmtpassword = N'MatKhauMoi#2026a';
   ```
 
-  hoặc sửa mật khẩu trong `12_linked_server.sql` rồi chạy lại file.
+  hoặc sửa mật khẩu trong `10_security.sql` rồi dựng lại bằng `scripts/trien_khai.py`.
 
 ### 2.3. Kiểm tra thay đổi đã được lưu
 
@@ -143,38 +140,39 @@ FROM sys.sql_logins WHERE name = N'lg_giaovu_cntt';
 
 ### Chuẩn bị (một lần)
 
-- Đã chạy `10_security.sql` (cần login `lg_daotao`).
-- SQL Server bật chế độ đăng nhập hỗn hợp: `SELECT SERVERPROPERTY('IsIntegratedSecurityOnly');` phải trả 0.
-  Nếu trả 1, xem mục 1.2.
-- Kết nối bằng tài khoản quản trị (cần quyền `sysadmin`).
+- `docker compose up -d`, đợi khoảng 1 phút, rồi chạy `python3 -I scripts/trien_khai.py` (hoặc từng file theo README).
+- Kết nối instance điều phối `localhost,14330` bằng `sa` (cần quyền `sysadmin`).
 
 ### Chạy
 
-1. Mở `12_linked_server.sql` trong SSMS, bấm F5 chạy cả file.
-2. Xem tab **Messages** trước, rồi các tab kết quả.
+1. Mở `12_linked_server.sql`, chạy cả file trên cổng 14330.
+2. Xem các tab kết quả theo thứ tự.
 
 ### Kết quả mong đợi
 
 | Chỗ xem | Mong đợi |
 | --- | --- |
-| Messages | Dòng `LS_LOCAL đã sẵn sàng, provider = ...`. Vài dòng `Provider ... không dùng được` trước đó là bình thường nếu máy thiếu provider đời mới. |
-| Bảng sau phần 1 | 1 dòng `LS_LOCAL`, `is_rpc_out_enabled = 1` |
+| Phần 1 | 3 dòng `LS_QLSV_CNTT`, `LS_QLSV_NgoaiNgu`, `LS_QLSV_DuLich`, mỗi dòng trỏ tới một máy chủ khác nhau (`qlsv_cntt`, `qlsv_ngoaingu`, `qlsv_dulich`), `RpcOut = 1` |
+| Phần 2 | 4 dòng, mỗi dòng có **`MayChu` khác nhau** (`qlsv_tonghop`, `qlsv_cntt`, `qlsv_ngoaingu`, `qlsv_dulich`): bằng chứng dữ liệu nằm ở 4 instance. 72, 24, 24, 24 dòng |
 | Câu 1 | 5 sinh viên khoa CNTT |
 | Câu 2 | `SoSV_QuaLinkedServer = SoSV_QuaViewToanCuc = 72` (hai số phải bằng nhau) |
-| Câu 3 | Lớp học phần HK1-2627 của khoa Du lịch kèm tên môn |
-| Câu 4 | Lớp học phần khoa Ngoại ngữ có từ 10 sinh viên trở lên |
-| Câu 5 | 1 dòng: số đăng ký của khoa CNTT |
-| Câu 6 | 3 dòng (CNTT, DL, NN) với điểm trung bình |
-| Bảng `sp_helplinkedsrvlogin` | 2 dòng ánh xạ: người chạy script và `lg_admin`, cùng đăng nhập từ xa bằng `lg_daotao` (không có dòng áp dụng cho mọi login) |
-| Dòng cuối | Bảng `Đúng: lg_bgh bị từ chối`: login khác không dùng được `LS_LOCAL` (nếu thấy `LỖI BẢO MẬT` thì ánh xạ đang quá rộng) |
+| Câu 3 | Lớp học phần HK1-2627 của khoa Du lịch (node Du lịch) kèm tên môn (node điều phối) |
+| Câu 4 | 3 sinh viên: học vụ lấy từ node CNTT, CCCD và email lấy từ điều phối |
+| Câu 5 | Lớp học phần khoa Ngoại ngữ có từ 10 sinh viên trở lên |
+| Câu 6 | `MayChu = qlsv_cntt`, số đăng ký 207 |
+| Câu 7 và 8 | Điểm trung bình từng khoa (3 dòng) và số lượt có điểm (44 mỗi khoa) khớp giữa Linked Server và view |
+| Câu 9 | 3 dòng, tổng 72 sinh viên và 621 lượt đăng ký toàn trường |
+| Phần 5 | `Trong giao dịch` điểm 9.00 ở cả 2 node, `Sau ROLLBACK` về điểm cũ (8.10 và 5.70): giao dịch phân tán qua MSDTC |
+| Phần 6 | `Đúng: node CNTT từ chối lg_bgh` (lỗi 229) |
 
 ### Kiểm tra thủ công thêm
 
 ```sql
-EXEC sp_testlinkedserver N'LS_LOCAL';                  -- không lỗi là kết nối được
-SELECT COUNT(*) FROM LS_LOCAL.QLSV_CNTT.dbo.DangKy;    -- một câu tên 4 phần chạy tay
+EXEC sp_testlinkedserver N'LS_QLSV_CNTT';                          -- không lỗi là kết nối được
+SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy;            -- một câu tên 4 phần chạy tay
 ```
 
+Có thể kiểm tra từng node trực tiếp: kết nối `localhost,14331` (CNTT) và chạy `SELECT @@SERVERNAME, COUNT(*) FROM QLSV_CNTT.dbo.SinhVien;` (24 dòng).
 Với câu 3 và 4 bật **Actual Execution Plan** (Ctrl+M) trước khi chạy: trong plan phải có toán tử
 **Remote Query** hoặc **Remote Scan**. Chụp ảnh làm bằng chứng demo (mục 7 của đề), đặt vào `images/`
 theo tên như `12_linked_server.png`.
@@ -183,9 +181,10 @@ theo tên như `12_linked_server.png`.
 
 | Dấu hiệu | Nguyên nhân thường gặp |
 | --- | --- |
-| `Không tạo được LS_LOCAL` | Cả 3 provider thất bại; đọc các dòng `Provider ... không dùng được` ở Messages |
-| `Login failed for user 'lg_daotao'` | Chưa chạy `10_security.sql`, hoặc chưa bật chế độ đăng nhập hỗn hợp |
-| Lỗi chứng chỉ (certificate) | Chuỗi kết nối cần `TrustServerCertificate=yes` (script đã có); thử provider khác |
+| `Could not find server 'LS_QLSV_...'` | Chưa chạy `02b_node_links.sql` |
+| 7416 `no login-mapping exists` | Linked Server có `@provstr`; bỏ chuỗi đó và chạy lại `02b`, rồi `10` |
+| `Login failed for user ...` ở node | Chưa chạy `10_security.sql` (login phải có ở cả 4 instance) hoặc sai mật khẩu ánh xạ |
+| 7395 / 1206 | Xem bảng xử lý sự cố ở README |
 | Lỗi khác | Chép nguyên văn dòng đỏ ở Messages |
 
 ---
@@ -198,7 +197,7 @@ Mục đích: có bằng chứng cho yêu cầu kỹ thuật số 12 và demo m�
 
 1. Mở `11_transactions_concurrency.sql`, chạy từ dòng `PHẦN E` đến hết file (chọn đoạn rồi chạy). Các khối blocking và deadlock ở giữa nằm trong comment nên chạy cả file cũng an toàn.
 2. **E1** (bảng thử 300.000 dòng ở tempdb): tự tạo, đo và xóa; không đụng dữ liệu thật.
-3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02_create_tables.sql` thì index mất, chạy lại E2.
+3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02a_create_node.sql` thì index mất, chạy lại E2.
 
 ### Kết quả mong đợi (đã đo trên SQL Server Docker)
 
@@ -397,7 +396,7 @@ Chạy phần E của `database/11_transactions_concurrency.sql` (từ dòng `PH
 
 - **Hình 55 – `13_du_lieu_mau.png`:** `SELECT TOP 5 * FROM QLSV_CNTT.dbo.SinhVien;` rồi `... LopHocPhan;` rồi `... DangKy;`. Chụp ba bảng (ba tab hoặc ghép một ảnh).
 - **Hình 56 – `13_dem_dong.png`:** có thể **dùng lại ảnh của hình 1**; hoặc chạy `EXEC dbo.sp_PhanBoDuLieu;`.
-- **Hình 59 – `13_linked_server.png`:** chạy cả `database/12_linked_server.sql`. Chụp: bảng `sys.servers` (có `LS_LOCAL`), kết quả câu 2 (**hai số 72 bằng nhau**) và các câu 1, 3–6. Có thể chụp 2–3 ảnh. Xem thêm mục 3 của tài liệu này.
+- **Hình 59 – `13_linked_server.png`:** chạy cả `database/12_linked_server.sql`. Chụp: phần 1 (3 Linked Server), phần 2 (**4 `MayChu` khác nhau**), kết quả câu 2 (**hai số 72 bằng nhau**) và các câu 3–9. Có thể chụp 2–3 ảnh. Xem thêm mục 3 của tài liệu này.
 - **Hình 60 – `13_linked_server_plan.png`:** chạy câu 3 hoặc câu 4 của `12_linked_server.sql` với **kế hoạch thực tế**; chụp toán tử **Remote Query / Remote Scan**. SQLPro chưa chắc có chức năng này; nếu không có, dùng Azure Data Studio hoặc SSMS (hoặc bỏ ảnh này và ghi chú trong báo cáo rằng đã chứng minh bằng kết quả câu 2).
 
 ---
@@ -407,3 +406,58 @@ Chạy phần E của `database/11_transactions_concurrency.sql` (từ dòng `PH
 1. Lưu ảnh mới vào `images/` **đúng tên file cũ** (ghi đè).
 2. Trong Word: chuột phải vào ảnh cũ > Change Picture > From a File, chọn ảnh mới; giữ nguyên dòng chú thích "Hình n. ...".
 3. Nhấn **Yes** khi Word hỏi cập nhật trường; hoặc chuột phải mục lục > Update Field > Update entire table.
+
+---
+
+## 6. Demo cho giảng viên: hàm, thủ tục, trigger, giao dịch, Linked Server
+
+### 6.1. Trước buổi demo (5 phút)
+
+```
+docker compose up -d                      # đợi docker compose ps báo cả 4 container (healthy)
+python3 -I scripts/trien_khai.py          # dựng lại từ đầu, dữ liệu về đúng dữ liệu mẫu
+python3 -I scripts/kiem_tra_demo.py       # chạy 5 file demo, đối chiếu 52 điểm, in ĐÚNG / SAI
+```
+
+`kiem_tra_demo.py` phải kết thúc bằng `Tất cả đều đúng.` Mỗi dòng ĐÚNG là một điều bạn sẽ chỉ cho giảng viên, kèm con số
+mong đợi trong chính file `scripts/kiem_tra_demo.py` (biến `MONG_DOI`). Nếu có dòng SAI: thường là dữ liệu đã bị sửa khi thử
+ứng dụng, chạy lại `trien_khai.py`. Mọi file demo đều tự ROLLBACK nên chạy bao nhiêu lần dữ liệu cũng không đổi.
+
+Trong buổi demo: mở SSMS hoặc Azure Data Studio, kết nối `localhost,14330` bằng `sa` (mật khẩu trong `.env`), mở từng file,
+**bôi đen một khối rồi chạy** (F5) thay vì chạy cả file, để giảng viên thấy từng kết quả một.
+
+### 6.2. Cách biết kết quả là đúng
+
+Mỗi khối demo đều có **bằng chứng tự kiểm** ngay trong kết quả, không cần tin lời người demo:
+
+- **Thành công:** in dòng dữ liệu vừa ghi, đọc lại từ đúng node (ví dụ `Node CNTT | 0`, `Node NN | 1` khi chuyển khoa).
+- **Bị chặn đúng:** in mã lỗi tự đặt (500xx ở thủ tục, 5090x ở trigger) và thông báo tiếng Việt; dòng ngay sau kiểm tra dữ liệu
+  không bị ghi (`... còn ở node không? | 0`).
+- **ROLLBACK:** đọc lại sau khi hủy, số dòng về như trước.
+- **Tính toán:** chọn ví dụ tính nhẩm được (điểm tổng kết = 0,4 x quá trình + 0,6 x thi: 8,5 và 9 cho 8,80).
+
+### 6.3. Kịch bản từng phần
+
+| Phần | File, khối chạy | Chỉ cho giảng viên | Kết quả đúng |
+| --- | --- | --- | --- |
+| Hàm | `08_functions.sql`, phần GỌI THỬ | `fn_XepLoaiDiem` với các giá trị ở ngay ngưỡng | 8 là Giỏi, 4 là Yếu, 3,9 là Không đạt, NULL là Chưa có điểm |
+| | | Điểm TB tích lũy, tín chỉ, xếp loại lớp 66.CNTT-1 | 24010001: 6.89, 34 tín chỉ, Khá |
+| | | Kiểm tra chéo cuối file | 0 dòng: hai cách tính độc lập cho cùng một kết quả |
+| Thủ tục | `07_procedures.sql`, phần VÍ DỤ GỌI | `sp_ThemSinhVien` thành công, rồi trùng CCCD | Lỗi 2627, sau đó node CNTT `0` dòng: ghi 2 instance, lỗi ở instance thứ hai hủy cả hai |
+| | | `sp_ChuyenKhoa` | `Node CNTT 0`, `Node NN 1`, hồ sơ `1`: dữ liệu chuyển node, hồ sơ giữ nguyên |
+| | | Các ca bị từ chối | 50023, 50033, 50032, 50041, 50062, 50072, 50082 |
+| | | `sp_DemoGiaoDich` 0 rồi 1 | `1 | 1` rồi `0 | 0` |
+| Trigger | `09_triggers.sql`, phần 3 | Trigger 1: sửa và xóa điểm | `NhatKy` ở node CNTT có 2 dòng, giữ cả điểm cũ và mới |
+| | | Trigger 2-5 | Lỗi 50901, 50902, 50905, 50903, 50904; dòng kiểm tra sau mỗi lỗi cho thấy không ghi gì |
+| | | Trigger 6-7 | Nhật ký ở **3 database** (CNTT, NN, TongHop) của cùng một sinh viên; CCCD bị che `***0096`; sau ROLLBACK `0` dòng |
+| Giao dịch, đồng thời | `11_transactions_concurrency.sql`, phần A | A1 COMMIT, A2 ROLLBACK | `Sau COMMIT 1 1`; lỗi 2627 rồi `Sau ROLLBACK 0 0` |
+| | Phần B (2 cửa sổ) | Cửa sổ 2 bị chặn, chạy D1 và D2 | D1: phiên bị chặn chờ `LCK_M_U`, cột `Node = qlsv_cntt`; D2: khóa `X` GRANT và `U` WAIT |
+| | Phần C (2 cửa sổ) | Hai giao dịch khóa ngược thứ tự | Cửa sổ 2 báo lỗi 1222 sau 30 giây (deadlock giữa 2 instance không được tự phát hiện, xem ghi chú trong file) |
+| | Phần E | Trước và sau index | `Clustered Index Scan`, 1753 trang, chuyển thành `Index Seek`, 3 trang |
+| Linked Server | `12_linked_server.sql` | Phần 2 | 4 dòng, **4 tên máy chủ khác nhau**: bằng chứng dữ liệu nằm ở 4 instance |
+| | | Câu 2, câu 7-9 | `72 = 72`; thống kê toàn trường 72 sinh viên, 621 đăng ký |
+| | | Phần 5 | `Trong giao dịch 9.00 9.00`, `Sau ROLLBACK 8.10 5.70` (MSDTC) |
+| | | Phần 6 | Node từ chối lg_bgh, lỗi 229 |
+
+Hai phần B và C cần 2 cửa sổ nên `kiem_tra_demo.py` không chạy tự động; làm theo các bước ghi trong comment của file.
+

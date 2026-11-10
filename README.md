@@ -4,17 +4,24 @@
 (Công nghệ thông tin, Ngoại ngữ, Du lịch) được phân tán ra nhiều node; ứng dụng và các view toàn cục cho phép
 truy vấn thống nhất mà người dùng không cần biết dữ liệu nằm ở đâu.
 
-![Kiến trúc phân tán](images/kien_truc_phan_tan.png)
+![Kiến trúc phân tán](images/kien_truc_phan_tan.svg)
 
 ## Kiến trúc
 
-Mô phỏng bằng **5 database trên một SQL Server instance**:
+Hệ thống chạy trên **4 instance SQL Server riêng biệt** (4 container Docker, xem `docker-compose.yml`), nối với nhau bằng Linked Server:
 
-| Database | Vai trò |
-| --- | --- |
-| `QLSV_TapTrung` | CSDL tập trung gốc (9 bảng, 3NF). Nguồn để phân mảnh và để kiểm tra tái thiết |
-| `QLSV_TongHop` | Node điều phối: bản chính danh mục, mảnh dọc hồ sơ cá nhân, VIEW toàn cục, thủ tục, hàm, phân quyền |
-| `QLSV_CNTT`, `QLSV_NgoaiNgu`, `QLSV_DuLich` | 3 node khoa: giảng viên, lớp, sinh viên, lớp học phần, đăng ký của khoa đó |
+| Instance (container, cổng) | Database | Vai trò |
+| --- | --- | --- |
+| `qlsv_tonghop` (14330) | `QLSV_TongHop` | Node điều phối: bản chính danh mục, mảnh dọc hồ sơ cá nhân, VIEW toàn cục, thủ tục, hàm, phân quyền |
+| `qlsv_tonghop` (14330) | `QLSV_TapTrung` | CSDL tập trung gốc (9 bảng, 3NF). Nguồn để phân mảnh và để kiểm tra tái thiết |
+| `qlsv_cntt` (14331) | `QLSV_CNTT` | Node khoa CNTT: giảng viên, lớp, sinh viên, lớp học phần, đăng ký của khoa |
+| `qlsv_ngoaingu` (14332) | `QLSV_NgoaiNgu` | Node khoa Ngoại ngữ (cùng cấu trúc) |
+| `qlsv_dulich` (14333) | `QLSV_DuLich` | Node khoa Du lịch (cùng cấu trúc) |
+
+Trên instance điều phối, `QLSV_CNTT`, `QLSV_NgoaiNgu`, `QLSV_DuLich` là **database đại diện** chỉ chứa `SYNONYM` trỏ qua Linked Server
+(`LS_QLSV_CNTT`, `LS_QLSV_NgoaiNgu`, `LS_QLSV_DuLich`) tới bảng thật ở instance node. Nhờ vậy tên 3 phần như `QLSV_CNTT.dbo.SinhVien` trong view,
+thủ tục và ứng dụng vẫn chạy nguyên, nhưng thực chất là truy vấn liên instance; ghi vào nhiều node trong một giao dịch dùng MSDTC.
+Chi tiết trong `database/02b_node_links.sql`.
 
 Cách phân mảnh (chi tiết trong `database/04_fragmentation.sql`):
 
@@ -24,10 +31,30 @@ Cách phân mảnh (chi tiết trong `database/04_fragmentation.sql`):
 - **Dọc:** `SinhVien` thành mảnh học vụ (ở node khoa) và `SinhVien_HoSo` (CCCD, điện thoại, địa chỉ, ở TongHop).
 - **Tái thiết:** bảng ngang = `UNION ALL` của 3 node; `SinhVien` = (SV của 3 node) `JOIN` `SinhVien_HoSo` theo `MaSV`.
 
+### Bảng phân mảnh, vị trí lưu trữ và nhân bản
+
+| Bảng | Cách phân mảnh | Lưu ở đâu | Nhân bản và đồng bộ |
+| --- | --- | --- | --- |
+| `Khoa`, `HocKy`, `MonHoc` | Nhân bản toàn bộ (bảng nhỏ, ít đổi, đọc nhiều) | Bản chính ở điều phối; bản sao ở cả 3 node khoa | Một chiều điều phối → node bằng `sp_DongBoDanhMuc` (chạy tay; sửa dòng khác, thêm dòng thiếu, không xóa). Trigger `trg_LopHocPhan_KiemTraMonHoc` chặn giảng viên mở lớp cho môn của khoa khác (dùng bản sao ở chính node) |
+| `GiangVien`, `Lop` | Ngang chính theo `MaKhoa` | Node của khoa đó | Không nhân bản: mỗi dòng có đúng một bản |
+| `SinhVien` (học vụ: `MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai`) | Dọc, và ngang dẫn xuất theo `Lop` | Node của khoa chứa lớp | Không nhân bản; giữ nhất quán với mảnh hồ sơ bằng giao dịch phân tán |
+| `SinhVien_HoSo` (`MaSV, CCCD, DienThoai, Email, DiaChi`) | Dọc (mảnh nhạy cảm), chung khóa `MaSV` | Điều phối | Không nhân bản; luôn ghi cùng giao dịch với mảnh học vụ |
+| `LopHocPhan` | Ngang dẫn xuất theo `GiangVien` | Node khoa của giảng viên mở lớp | Không nhân bản |
+| `DangKy` | Ngang dẫn xuất theo `SinhVien` | Node khoa của sinh viên | Không nhân bản |
+| `NhatKy` | Mỗi instance giữ nhật ký riêng của mình | Điều phối và 3 node | Không đồng bộ (nhật ký cục bộ) |
+| (toàn bộ 9 bảng gốc) | `QLSV_TapTrung`: bản tập trung ban đầu | Điều phối | Chỉ dùng để phân mảnh và kiểm tra tái thiết, không dùng khi vận hành |
+
+Kiểm tra đầy đủ, không trùng, tái thiết: phần 2 của `04_fragmentation.sql` (`Thieu = Thua = LechSoDong = 0`).
+Kiểm thử đồng bộ: `13_dong_bo_kiem_thu.sql`. Mất kết nối: `scripts/thu_mat_ket_noi.py`.
+
 ## Cấu trúc thư mục
 
 ```
-database/   12 script SQL, chạy theo thứ tự số
+database/   14 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b)
+scripts/    chay_sql.py (chạy file .sql), trien_khai.py (dựng lại cả 4 instance bằng một lệnh),
+            thu_mat_ket_noi.py (dừng một node, thử, bật lại, đồng bộ lại),
+            kiem_tra_demo.py (chạy 5 file demo, in ĐÚNG / SAI cho từng kết quả cần trình bày)
+docker-compose.yml   4 instance SQL Server
 app/        ứng dụng Streamlit (app.py, config.py, requirements.txt, chay.sh)
 report/     báo cáo Word
 images/     sơ đồ và ảnh demo
@@ -36,26 +63,38 @@ docs/       HuongDan.md: hướng dẫn chi tiết (đăng nhập, quyền hạn
 
 ## Yêu cầu
 
-- SQL Server 2019 trở lên (đã chạy thử trên **Azure SQL Edge trong Docker**, cổng 1433). Cần quyền `sysadmin` để chạy script.
-- Chế độ đăng nhập **SQL Server và Windows** (đã bật sẵn với SQL Server trong Docker).
-- Python 3.10+ và **ODBC Driver 18 for SQL Server** (cho ứng dụng).
-- Một công cụ chạy SQL: SSMS, Azure Data Studio hoặc SQLPro for MSSQL.
+- **Docker** với khoảng **8 GB RAM** (4 instance, mỗi instance giới hạn 1 GB). Trên Mac Apple Silicon image `mssql/server` chạy qua giả lập amd64 nên khởi động chậm hơn.
+  **Không dùng Azure SQL Edge:** bản này không có Linked Server.
+- Python 3.10+ và **ODBC Driver 18 for SQL Server** (cho ứng dụng và `scripts/`; cần `pip install pyodbc`).
+- Hoặc một công cụ chạy SQL (SSMS, Azure Data Studio): nối tới `localhost,14330` (điều phối) bằng `sa`, mật khẩu trong `.env`.
 
-Nếu cần một SQL Server nhanh bằng Docker (đổi mật khẩu `<MatKhauManh>`):
+Khởi động 4 instance:
 
 ```
-docker run -e ACCEPT_EULA=1 -e MSSQL_SA_PASSWORD=<MatKhauManh> -p 127.0.0.1:1433:1433 -d mcr.microsoft.com/azure-sql-edge
+cp .env.example .env        # rồi mở .env, đặt MSSQL_SA_PASSWORD (mật khẩu sa dùng chung cho 4 instance)
+docker compose up -d
+docker compose ps           # đợi cả 4 container ở trạng thái (healthy), khoảng 1 phút
 ```
+
+- Mật khẩu `sa` nằm trong `.env` (đã nằm trong `.gitignore`), không nằm trong repo; `scripts/` tự đọc file này. Mật khẩu chỉ có hiệu lực lúc volume được tạo lần đầu:
+  muốn đổi sau này phải xóa dữ liệu bằng `docker compose down -v`.
+- Dữ liệu nằm trong volume riêng của từng node nên `docker compose down` và `up` không làm mất dữ liệu; `down -v` mới xóa.
+- Cổng 14330-14333 chỉ mở cho `127.0.0.1` (máy này); các container nối với nhau qua mạng riêng của Docker.
+- Chạy tay `02b_node_links.sql` bằng SSMS: bật SQLCMD Mode và thêm dòng đầu `:setvar SA_MATKHAU "<mật khẩu sa>"` (script `scripts/` làm việc này tự động).
 
 ## Cài đặt cơ sở dữ liệu
 
-Mở từng file trong `database/` bằng tài khoản quản trị, chạy cả file (F5) **theo đúng thứ tự**. Mọi file chạy lại
-được nhiều lần; file lưu UTF-8 có BOM để tiếng Việt hiển thị đúng.
+**Cách nhanh:** `python3 -I scripts/trien_khai.py` dựng lại toàn bộ (mất khoảng 1 phút) và dừng ngay khi có lỗi.
+
+**Cách thủ công:** chạy từng file bằng tài khoản `sa`, **theo đúng thứ tự**. Chỉ `02a` chạy trên 3 instance node, mỗi node một lần với 2 biến, ví dụ
+`python3 -I scripts/chay_sql.py 14331 database/02a_create_node.sql --bien=NODE_DB=QLSV_CNTT,MA_KHOA=CNTT`; mọi file còn lại chạy trên instance điều phối (cổng 14330).
+Mọi file chạy lại được nhiều lần; file lưu UTF-8 có BOM để tiếng Việt hiển thị đúng.
 
 | # | File | Nội dung |
 | --- | --- | --- |
-| 1 | `01_create_databases.sql` | Tạo 5 database (xóa bản cũ nếu có) |
-| 2 | `02_create_tables.sql` | Tạo bảng, khóa, ràng buộc ở từng node |
+| 2 | `02_create_tables.sql` | Tạo 5 database ở instance điều phối (xóa bản cũ nếu có) và bảng, khóa, ràng buộc của CSDL tập trung và node điều phối |
+| 2a | `02a_create_node.sql` | Tạo database và bảng cho một node khoa; một file dùng chung cho 3 node (biến `NODE_DB`, `MA_KHOA`) |
+| 2b | `02b_node_links.sql` | 3 Linked Server (điều phối → node), database đại diện với synonym |
 | 3 | `03_seed_data.sql` | Dữ liệu mẫu vào CSDL tập trung (3 khoa, 72 sinh viên, 621 lượt đăng ký) |
 | 4 | `04_fragmentation.sql` | Phân mảnh ngang và dọc sang các node, kiểm tra tái thiết |
 | 5 | `05_views.sql` | 5 view toàn cục, tái thiết và báo cáo |
@@ -65,18 +104,19 @@ Mở từng file trong `database/` bằng tài khoản quản trị, chạy cả
 | 9 | `09_triggers.sql` | 7 loại trigger: kiểm soát dữ liệu và nhật ký |
 | 10 | `10_security.sql` | 6 tài khoản, role, GRANT, DENY, REVOKE, phạm vi khoa cho giáo vụ |
 | 11 | `11_transactions_concurrency.sql` | COMMIT, ROLLBACK; blocking, deadlock (2 cửa sổ, nằm trong comment); hiệu năng và index (phần E) |
-| 12 | `12_linked_server.sql` | Linked Server `LS_LOCAL`, truy vấn tên 4 phần |
+| 12 | `12_linked_server.sql` | Truy vấn liên nút và tổng hợp toàn hệ thống qua Linked Server (tên 4 phần, OPENQUERY, giao dịch phân tán) |
+| 13 | `13_dong_bo_kiem_thu.sql` | Kiểm thử đồng bộ: đổi ở một nơi, kiểm tra ở cả 4 nơi (thêm, sửa, chuyển khoa, xóa, danh mục); mọi thay đổi đều ROLLBACK |
 
 Sau khi chạy `04` và `05`, các bảng kiểm tra ở cuối file phải cho `Thieu = Thua = 0`.
-Chạy lại `02` thì phải chạy lại từ `03` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
+Chạy lại `02` hoặc `02a` thì phải chạy lại từ `02b` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
 
 ## Tài khoản
 
-Mật khẩu ở phần 1 của `database/10_security.sql`. **Đây là mật khẩu demo nằm trong mã nguồn:** chỉ dùng trên máy cá nhân; mở cổng SQL Server chỉ cho `127.0.0.1` (như lệnh Docker ở trên, không dùng `-p 1433:1433`), để repo ở chế độ private và đổi mật khẩu trước khi dùng thật (cách đổi: `docs/HuongDan.md`, mục 2.2).
+Mật khẩu ở phần 1 của `database/10_security.sql`. **Đây là mật khẩu demo nằm trong mã nguồn:** chỉ dùng trên máy cá nhân; giữ nguyên việc chỉ mở cổng cho `127.0.0.1`, để repo ở chế độ private và đổi mật khẩu trước khi dùng thật (cách đổi: `docs/HuongDan.md`, mục 2.2).
 
 | Tài khoản | Vai trò | Quyền chính |
 | --- | --- | --- |
-| `lg_admin` | Quản trị | `db_owner` ở 5 database |
+| `lg_admin` | Quản trị | `db_owner` ở các database của cả 4 instance |
 | `lg_daotao` | Phòng Đào tạo | Xem mọi view, chạy mọi thủ tục, đọc hồ sơ cá nhân qua `vw_SinhVien_DayDu` |
 | `lg_giaovu_cntt`, `lg_giaovu_nn`, `lg_giaovu_dl` | Giáo vụ từng khoa | Chỉ thấy và sửa điểm của khoa mình |
 | `lg_bgh` | Ban giám hiệu | Chỉ xem thống kê |
@@ -85,8 +125,7 @@ Chi tiết quyền, cách đổi mật khẩu và đăng nhập thử: `docs/Huo
 
 ## Chạy ứng dụng
 
-1. Mở `app/config.py`, đặt `SERVER` theo máy chủ của bạn (ví dụ `localhost`, `localhost\SQLEXPRESS`, `localhost,1433`);
-   hoặc đặt biến môi trường `QLSV_SERVER`. Nếu dùng ODBC Driver 17, đặt `QLSV_DRIVER`.
+1. `app/config.py` mặc định nối tới instance điều phối `localhost,14330`; đổi bằng biến môi trường `QLSV_SERVER` nếu cần. Nếu dùng ODBC Driver 17, đặt `QLSV_DRIVER`.
 2. Trong thư mục `app/`:
 
    ```
@@ -108,6 +147,31 @@ Chức năng theo vai trò:
 Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa chỉ trang, không giới hạn thời gian mặc định
 (`PHIEN_PHUT` trong `config.py`). Không chia sẻ địa chỉ khi đang đăng nhập.
 
+## Khi một node mất kết nối
+
+`python3 -I scripts/thu_mat_ket_noi.py [qlsv_dulich]` dừng container của node, thử từ điều phối, bật lại và đồng bộ lại. Kết quả đã đo (node Du lịch bị dừng):
+
+| Thao tác từ điều phối khi node vắng | Kết quả |
+| --- | --- |
+| Đọc dữ liệu chỉ ở điều phối (`SinhVien_HoSo`) hoặc ở node còn sống | Vẫn chạy bình thường |
+| Đọc node vắng, hoặc VIEW toàn cục (cần đủ 3 node) | Lỗi sau khoảng 10 giây (không kết nối được); không trả kết quả thiếu |
+| `sp_ThemSinhVien` (kể cả cho lớp CNTT) | Lỗi: thủ tục tìm lớp ở cả 3 node nên một node vắng là chặn tất cả. Không dòng nào được ghi |
+| Giao dịch phân tán chạm node vắng | Lỗi, giao dịch bị hủy; điều phối không giữ dòng sửa dở |
+| `sp_DongBoDanhMuc` | Lỗi, hủy toàn bộ (một giao dịch); không node nào bị đồng bộ nửa chừng |
+| Sửa danh mục ở điều phối trong lúc node vắng | Được; bản sao ở node bị cũ |
+
+Phục hồi: `docker start <node>` → chạy `EXEC dbo.sp_DongBoDanhMuc @MaKhoa = '<khoa>'` để bản sao khớp lại bản chính → chạy lại phần 2 của `04` hoặc `13` để kiểm tra.
+Dữ liệu phân mảnh (sinh viên, đăng ký, điểm) không cần đồng bộ lại vì mỗi dòng chỉ có một bản và giao dịch bị hủy không để lại gì.
+Chưa có hàng đợi ghi bù cho node vắng: thao tác ghi vào node đó phải làm lại sau khi node trở lại.
+
+## Giới hạn đã biết của kiến trúc nhiều instance
+
+- **Chuỗi sở hữu giữa database không đi qua instance.** Mỗi login đi sang node bằng login cùng tên, nên mọi giáo vụ và Ban giám hiệu cần `SELECT` ở cả 3 node để các view toàn cục chạy được.
+  Hệ quả: người đã có tài khoản có thể gõ thẳng tên 4 phần (`LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy`) và đọc dữ liệu học vụ của khoa khác, bỏ qua lọc `PhamViKhoaCuaToi`.
+  Ghi vẫn bị node chặn (giáo vụ chỉ sửa được `DiemQT`, `DiemThi` của khoa mình) và hồ sơ nhạy cảm `SinhVien_HoSo` chỉ có ở điều phối. Muốn chặn hẳn việc đọc, phải chuyển các view thành thủ tục `EXECUTE AS` (chưa làm).
+- **Deadlock phân tán không được phát hiện** (mỗi instance chỉ thấy khóa của mình): dùng `SET LOCK_TIMEOUT`.
+- **Bảng ở node xa không dùng được `OUTPUT ... INTO`** (đã sửa câu 34, 35 của `06`).
+
 ## Demo gợi ý (7 nội dung bắt buộc)
 
 1. **Truy vấn nhiều node:** `06_queries_40.sql` (các câu `-- [PT]`) hoặc trang Phân tán.
@@ -116,7 +180,7 @@ Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa 
 4. **COMMIT và ROLLBACK:** phần A của `11_transactions_concurrency.sql`; hoặc hai nút trong trang Phân tán.
 5. **Blocking, deadlock:** phần B và C của `11` (2 cửa sổ), giám sát bằng truy vấn D1, D2.
 6. **Execution Plan và index:** phần E của `11` (Clustered Index Scan → Index Seek). Hướng dẫn: `docs/HuongDan.md` (mục 4).
-7. **Linked Server, tên 4 phần:** `12_linked_server.sql`. Hướng dẫn: `docs/HuongDan.md` (mục 3).
+7. **Linked Server, tên 4 phần, truy vấn liên nút và tổng hợp:** `12_linked_server.sql`; sơ đồ ở `images/kien_truc_phan_tan.svg`. Hướng dẫn: `docs/HuongDan.md` (mục 3).
 
 ## Xử lý sự cố
 
@@ -127,7 +191,10 @@ Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa 
 | `pyarrow requires NumPy 2.0` | Dùng `bash chay.sh` (môi trường ảo riêng) thay vì môi trường conda cũ |
 | `module 'config' has no attribute ...` | Sửa `config.py` xong phải khởi động lại ứng dụng (Ctrl+C, chạy lại) |
 | Câu truy vấn vào `DangKy` treo mãi | Còn một giao dịch chưa kết thúc ở cửa sổ khác (phần B của `11`): chạy `ROLLBACK TRAN;` ở đó |
-| `12_linked_server.sql` báo không tạo được | Đã chạy `10`? SQL Server đã bật đăng nhập hỗn hợp? Xem các dòng `Provider ... không dùng được` |
+| `02b` báo không nối được node | Container node chưa sẵn sàng (đợi thêm) hoặc chưa `docker compose up -d`; kiểm tra `docker compose ps` |
+| Lỗi 7416 `no login-mapping exists` | Linked Server tạo với `@provstr`: bỏ chuỗi đó (xem `02b`) rồi chạy lại `02b` và `10` |
+| Lỗi 7395 `nested transaction ... XACT_ABORT` | Ghi vào node trong `BEGIN TRAN` cần `SET XACT_ABORT ON;` ở đầu phiên |
+| Lỗi 1206 `MS DTC has cancelled` | Một trigger ở node tự ROLLBACK bên trong giao dịch phân tán; chạy lệnh đó trực tiếp trên node (xem demo Trigger 3 ở `09`) |
 
 ## Thành viên và phân công
 

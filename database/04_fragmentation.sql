@@ -46,11 +46,7 @@ INSERT @node VALUES (N'QLSV_CNTT', 'CNTT'), (N'QLSV_NgoaiNgu', 'NN'), (N'QLSV_Du
 -- Khuôn lệnh cho 1 node khoa; {DB} và {K} được thay bằng từng dòng của @node.
 DECLARE @tpl NVARCHAR(MAX) = N'
 -- tắt trigger (09_triggers.sql) khi nạp hàng loạt: tránh ghi NhatKy rác và kiểm tra sai thứ tự
-ALTER TABLE {DB}.dbo.DangKy     DISABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.LopHocPhan DISABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.SinhVien   DISABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.Lop        DISABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.GiangVien  DISABLE TRIGGER ALL;
+EXEC LS_{DB}.{DB}.sys.sp_executesql @tat;
 
 DELETE {DB}.dbo.DangKy;  DELETE {DB}.dbo.LopHocPhan;  DELETE {DB}.dbo.SinhVien;
 DELETE {DB}.dbo.Lop;     DELETE {DB}.dbo.GiangVien;
@@ -86,13 +82,14 @@ JOIN QLSV_TapTrung.dbo.SinhVien sv ON sv.MaSV = dk.MaSV
 JOIN QLSV_TapTrung.dbo.Lop l       ON l.MaLop = sv.MaLop
 WHERE l.MaKhoa = ''{K}'';
 
-ALTER TABLE {DB}.dbo.DangKy     ENABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.LopHocPhan ENABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.SinhVien   ENABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.Lop        ENABLE TRIGGER ALL;
-ALTER TABLE {DB}.dbo.GiangVien  ENABLE TRIGGER ALL;
+EXEC LS_{DB}.{DB}.sys.sp_executesql @bat;
 ';
 DECLARE @db SYSNAME, @k VARCHAR(10), @sql NVARCHAR(MAX);
+-- ALTER TABLE không chạy được trên synonym: gửi sang đúng instance node bằng sp_executesql từ xa
+DECLARE @tat NVARCHAR(MAX) = N'', @bat NVARCHAR(MAX) = N'';
+SELECT @tat += N'ALTER TABLE dbo.' + t + N' DISABLE TRIGGER ALL; ',
+       @bat += N'ALTER TABLE dbo.' + t + N' ENABLE TRIGGER ALL; '
+FROM (VALUES (N'DangKy'), (N'LopHocPhan'), (N'SinhVien'), (N'Lop'), (N'GiangVien')) x(t);
 
 IF NOT EXISTS (SELECT 1 FROM QLSV_TapTrung.dbo.SinhVien)
     THROW 50000, N'QLSV_TapTrung chưa có dữ liệu: hãy chạy 03_seed_data.sql trước.', 1;
@@ -120,7 +117,7 @@ BEGIN TRY
     WHILE @@FETCH_STATUS = 0
     BEGIN
         SET @sql = REPLACE(REPLACE(@tpl, N'{DB}', @db), N'{K}', @k);
-        EXEC (@sql);
+        EXEC sp_executesql @sql, N'@tat NVARCHAR(MAX), @bat NVARCHAR(MAX)', @tat, @bat;
         PRINT N'Đã phân mảnh sang ' + @db + N' (MaKhoa = ' + @k + N')';
         FETCH NEXT FROM c INTO @db, @k;
     END

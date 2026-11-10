@@ -8,7 +8,7 @@
 
    PHẦN A  chạy cả file (F5).
    PHẦN B, C nằm trong comment: sao chép từng khối ra 2 cửa sổ SSMS và làm theo số bước.
-   PHẦN D  truy vấn giám sát, chạy bất cứ lúc nào (không có blocking thì trả 0 dòng).
+   PHẦN D  truy vấn giám sát trên cả 4 instance, chạy bất cứ lúc nào (không có blocking thì trả 0 dòng).
    PHẦN E  hiệu năng và index: chạy cả phần E (F5); đọc hướng dẫn xem bằng chứng ở đầu phần E.
    ===================================================================== */
 
@@ -91,7 +91,9 @@ ROLLBACK TRAN;
 GO
 
 /* ========================= PHẦN C – DEADLOCK (2 cửa sổ) =========================
-Hai giao dịch sửa 2 dòng ở 2 node theo thứ tự ngược nhau nên chờ nhau; SQL Server hủy một bên (lỗi 1205).
+Hai giao dịch sửa 2 dòng ở 2 node theo thứ tự ngược nhau nên chờ nhau. LƯU Ý: 2 node là 2 instance riêng, mỗi
+instance chỉ thấy khóa của mình nên KHÔNG tự phát hiện deadlock phân tán (không có lỗi 1205). Đặt SET LOCK_TIMEOUT
+ở cửa sổ 2 thì sau thời gian chờ sẽ báo lỗi 1222; không đặt thì MSDTC hủy giao dịch khi quá hạn.
 
 -- CỬA SỔ 1: chạy TRƯỚC, rồi sang cửa sổ 2 ngay (trong 15 giây).
 USE QLSV_TongHop;
@@ -105,7 +107,7 @@ ROLLBACK TRAN;
 
 -- CỬA SỔ 2: chạy ngay sau cửa sổ 1.
 USE QLSV_TongHop;
-SET DEADLOCK_PRIORITY LOW;   -- cửa sổ 2 là nạn nhân
+SET LOCK_TIMEOUT 30000;      -- cửa sổ 2 tự báo lỗi 1222 sau 30 giây
 BEGIN TRAN;
     UPDATE QLSV_NgoaiNgu.dbo.DangKy SET DiemThi = 8
     WHERE MaSV = '24020001' AND MaLHP = 'NN101-HK1-2425-01';
@@ -114,29 +116,41 @@ BEGIN TRAN;
     WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01';
 ROLLBACK TRAN;
 
--- KẾT QUẢ: cửa sổ 2 báo "Msg 1205 ... chosen as the deadlock victim"; cửa sổ 1 chạy xong.
+-- KẾT QUẢ: cửa sổ 2 báo "Msg 1222 Lock request time out period exceeded"; cửa sổ 1 chạy xong.
 -- CÁCH TRÁNH: mọi giao dịch cùng sửa theo một thứ tự (CNTT trước, Ngoại ngữ sau) thì chỉ chờ, không deadlock.
 */
 GO
 
 /* ========================= PHẦN D – GIÁM SÁT (DMV) ========================= */
 
--- D1. Phiên nào đang bị chặn, bị phiên nào chặn?
-SELECT r.session_id AS SessionBiChan, r.blocking_session_id AS SessionGayChan,
-       r.wait_type, r.wait_time AS MsDaCho, DB_NAME(r.database_id) AS DB,
-       SUBSTRING(t.text, 1, 150) AS CauLenhBiChan
+-- Khóa và chờ khóa của bảng ở node nằm trên instance của node đó, nên D1 và D2 chạy cùng một câu hỏi trên
+-- CẢ 4 instance (điều phối + 3 node qua Linked Server) rồi gộp lại, cột Node cho biết kết quả của instance nào.
+DECLARE @d1 NVARCHAR(MAX) = N'
+SELECT @@SERVERNAME AS Node, r.session_id AS SessionBiChan, r.blocking_session_id AS SessionGayChan,
+       r.wait_type, r.wait_time AS MsDaCho, DB_NAME(r.database_id) AS DB, SUBSTRING(t.text, 1, 150) AS CauLenhBiChan
 FROM sys.dm_exec_requests r
 OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
-WHERE r.blocking_session_id <> 0;
-GO
-
--- D2. Khóa đang giữ (GRANT) hoặc đang chờ (WAIT) ở TongHop và 3 node
-SELECT request_session_id AS Session, DB_NAME(resource_database_id) AS DB,
+WHERE r.blocking_session_id <> 0';
+DECLARE @d2 NVARCHAR(MAX) = N'
+SELECT @@SERVERNAME AS Node, request_session_id AS Session, DB_NAME(resource_database_id) AS DB,
        resource_type, request_mode, request_status
 FROM sys.dm_tran_locks
-WHERE resource_type <> 'DATABASE'
-  AND resource_database_id IN (DB_ID(N'QLSV_TongHop'), DB_ID(N'QLSV_CNTT'), DB_ID(N'QLSV_NgoaiNgu'), DB_ID(N'QLSV_DuLich'))
-ORDER BY request_session_id, request_status DESC;
+WHERE resource_type <> ''DATABASE'' AND resource_database_id > 4';     -- > 4: bỏ database hệ thống
+
+-- DB để NULL được: DB_NAME() trả NULL nếu database vừa bị xóa trong lúc đọc khóa
+CREATE TABLE #d1 (Node SYSNAME, SessionBiChan INT, SessionGayChan INT, wait_type NVARCHAR(60), MsDaCho INT, DB NVARCHAR(128) NULL, CauLenhBiChan NVARCHAR(150));
+CREATE TABLE #d2 (Node SYSNAME, Session INT, DB NVARCHAR(128) NULL, resource_type NVARCHAR(60), request_mode NVARCHAR(60), request_status NVARCHAR(60));
+INSERT #d1 EXEC (@d1);                                  INSERT #d2 EXEC (@d2);
+INSERT #d1 EXEC (@d1) AT LS_QLSV_CNTT;                  INSERT #d2 EXEC (@d2) AT LS_QLSV_CNTT;
+INSERT #d1 EXEC (@d1) AT LS_QLSV_NgoaiNgu;              INSERT #d2 EXEC (@d2) AT LS_QLSV_NgoaiNgu;
+INSERT #d1 EXEC (@d1) AT LS_QLSV_DuLich;                INSERT #d2 EXEC (@d2) AT LS_QLSV_DuLich;
+
+-- D1. Phiên nào đang bị chặn, bị phiên nào chặn? (không có blocking thì trả 0 dòng)
+SELECT * FROM #d1 ORDER BY Node, SessionBiChan;
+
+-- D2. Khóa đang giữ (GRANT) hoặc đang chờ (WAIT)
+SELECT * FROM #d2 ORDER BY Node, Session, request_status DESC;
+DROP TABLE #d1, #d2;
 GO
 
 /* #####################################################################
@@ -235,7 +249,7 @@ GO
 
 /* =====================================================================
    E2. Tạo index thật cho bảng DangKy ở 3 node khoa
-   (chạy lại 02_create_tables.sql sẽ xóa bảng và index này -> chạy lại phần E2)
+   (chạy lại 02a_create_node.sql sẽ xóa bảng và index này -> chạy lại phần E2)
    ===================================================================== */
 DECLARE @tpl NVARCHAR(MAX) = N'
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N''IX_DangKy_MaLHP'' AND object_id = OBJECT_ID(N''dbo.DangKy''))
@@ -247,7 +261,7 @@ OPEN c;
 FETCH NEXT FROM c INTO @db;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    SET @exec = QUOTENAME(@db) + N'.sys.sp_executesql';
+    SET @exec = N'LS_' + @db + N'.' + QUOTENAME(@db) + N'.sys.sp_executesql';     -- chạy ở instance node
     EXEC @exec @tpl;
     FETCH NEXT FROM c INTO @db;
 END
@@ -256,12 +270,12 @@ DEALLOCATE c;
 GO
 
 -- Kiểm tra: mỗi node có index mới trên DangKy(MaLHP)
-SELECT N'QLSV_CNTT' AS DB, name AS TenIndex, type_desc FROM QLSV_CNTT.sys.indexes
-WHERE object_id = OBJECT_ID(N'QLSV_CNTT.dbo.DangKy') AND name = N'IX_DangKy_MaLHP'
+SELECT N'QLSV_CNTT' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_CNTT.QLSV_CNTT.sys.indexes i
+WHERE i.object_id = (SELECT object_id FROM LS_QLSV_CNTT.QLSV_CNTT.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP'
 UNION ALL
-SELECT N'QLSV_NgoaiNgu', name, type_desc FROM QLSV_NgoaiNgu.sys.indexes
-WHERE object_id = OBJECT_ID(N'QLSV_NgoaiNgu.dbo.DangKy') AND name = N'IX_DangKy_MaLHP'
+SELECT N'QLSV_NgoaiNgu' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.indexes i
+WHERE i.object_id = (SELECT object_id FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP'
 UNION ALL
-SELECT N'QLSV_DuLich', name, type_desc FROM QLSV_DuLich.sys.indexes
-WHERE object_id = OBJECT_ID(N'QLSV_DuLich.dbo.DangKy') AND name = N'IX_DangKy_MaLHP';
+SELECT N'QLSV_DuLich' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_DuLich.QLSV_DuLich.sys.indexes i
+WHERE i.object_id = (SELECT object_id FROM LS_QLSV_DuLich.QLSV_DuLich.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP';
 GO

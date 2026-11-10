@@ -116,7 +116,7 @@ GO
 
 -- Câu 11 (b): Khoa Ngoại ngữ có bao nhiêu giảng viên và tuổi trung bình là bao nhiêu?
 SELECT COUNT(*) AS SoGiangVien,
-       CAST(AVG(CAST(DATEDIFF(YEAR, NgaySinh, GETDATE()) AS DECIMAL(5,2))) AS DECIMAL(5,1)) AS TuoiTrungBinh
+       CAST(AVG(DATEDIFF(DAY, NgaySinh, GETDATE()) / 365.25) AS DECIMAL(5,1)) AS TuoiTrungBinh   -- theo ngày: DATEDIFF(YEAR) tính dư tuổi khi chưa tới sinh nhật
 FROM QLSV_NgoaiNgu.dbo.GiangVien;
 GO
 
@@ -366,15 +366,18 @@ SELECT N'Sau ROLLBACK' AS Buoc, TrangThai, COUNT(*) AS SoSV FROM dbo.vw_SinhVien
 GO
 
 -- Câu 34 (g): SỬA kèm truy vấn con: tăng thêm 10 chỗ cho lớp học phần CNTT đã đầy từ một nửa trở lên.
---   OUTPUT ... INTO cho thấy sĩ số tối đa cũ và mới của từng lớp bị đổi.
+--   Bảng ở node khác instance không dùng được OUTPUT ... INTO, nên chọn các lớp cần sửa vào bảng tạm trước
+--   (ghi lại sĩ số cũ và mới), rồi UPDATE theo đúng danh sách đó.
 BEGIN TRAN;
     DECLARE @doi TABLE (MaLHP VARCHAR(20), SiSoCu SMALLINT, SiSoMoi SMALLINT);
 
-    UPDATE lp
-    SET SiSoToiDa = lp.SiSoToiDa + 10
-    OUTPUT inserted.MaLHP, deleted.SiSoToiDa, inserted.SiSoToiDa INTO @doi   -- INTO: bảng có trigger (09)
+    INSERT @doi
+    SELECT lp.MaLHP, lp.SiSoToiDa, lp.SiSoToiDa + 10
     FROM QLSV_CNTT.dbo.LopHocPhan lp
     WHERE (SELECT COUNT(*) FROM QLSV_CNTT.dbo.DangKy d WHERE d.MaLHP = lp.MaLHP) * 2 >= lp.SiSoToiDa;
+
+    UPDATE lp SET SiSoToiDa = x.SiSoMoi
+    FROM QLSV_CNTT.dbo.LopHocPhan lp JOIN @doi x ON x.MaLHP = lp.MaLHP;
 
     SELECT MaLHP, SiSoCu, SiSoMoi FROM @doi ORDER BY MaLHP;
 ROLLBACK TRAN;
@@ -386,11 +389,14 @@ BEGIN TRAN;
 
     DECLARE @xoa TABLE (MaSV CHAR(8), MaLHP VARCHAR(20));
 
-    DELETE dk
-    OUTPUT deleted.MaSV, deleted.MaLHP INTO @xoa                               -- INTO: bảng có trigger (09)
+    INSERT @xoa                                                                -- ghi lại trước khi xóa (node xa: không có OUTPUT INTO)
+    SELECT dk.MaSV, dk.MaLHP
     FROM QLSV_DuLich.dbo.DangKy dk
     JOIN QLSV_DuLich.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
     WHERE lp.MaHK = 'HK1-2627' AND dk.DiemQT IS NULL AND dk.DiemThi IS NULL;
+
+    DELETE dk
+    FROM QLSV_DuLich.dbo.DangKy dk JOIN @xoa x ON x.MaSV = dk.MaSV AND x.MaLHP = dk.MaLHP;
 
     SELECT MaSV, MaLHP FROM @xoa ORDER BY MaSV, MaLHP;
     SELECT @truoc2 AS SoDongTruoc, COUNT(*) AS SoDongSau FROM QLSV_DuLich.dbo.DangKy;
@@ -402,9 +408,11 @@ GO
 BEGIN TRAN;
     SELECT N'Trước' AS Buoc, COUNT(*) AS SoSVToanTruong FROM dbo.vw_SinhVien_ToanCuc;
 
-    DELETE FROM dbo.SinhVien_HoSo        WHERE MaSV = '24010016';
-    DELETE FROM QLSV_CNTT.dbo.SinhVien   WHERE MaSV = '24010016'
-        AND NOT EXISTS (SELECT 1 FROM QLSV_CNTT.dbo.DangKy d WHERE d.MaSV = '24010016');
+    IF NOT EXISTS (SELECT 1 FROM QLSV_CNTT.dbo.DangKy WHERE MaSV = '24010016')     -- chặn cả hai lệnh, không xóa lệch một mảnh
+    BEGIN
+        DELETE FROM dbo.SinhVien_HoSo      WHERE MaSV = '24010016';
+        DELETE FROM QLSV_CNTT.dbo.SinhVien WHERE MaSV = '24010016';
+    END
 
     SELECT N'Sau DELETE' AS Buoc, COUNT(*) AS SoSVToanTruong FROM dbo.vw_SinhVien_ToanCuc;
 ROLLBACK TRAN;

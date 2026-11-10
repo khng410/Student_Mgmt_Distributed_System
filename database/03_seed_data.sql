@@ -262,7 +262,8 @@ INSERT INTO dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa, PhongHoc) 
     ('DL102-HK1-2627-01', 'DL102', 'HK1-2627', 1, 'GVDL01', 50, 'B205');
 GO
 
-/* ---------- 8. DangKy (DiemTK là cột tính toán, không nạp) ---------- */
+/* ---------- 8. DangKy: mỗi khoa một lệnh INSERT (DiemTK là cột tính toán, không nạp) ---------- */
+-- Khoa CNTT: 207 lượt đăng ký
 INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('24010001', 'CHUNG01-HK1-2425-01', '2024-09-09', 8.0, 5.6),
     ('24010001', 'CNTT101-HK1-2425-01', '2024-09-11', 8.5, 8.1),
@@ -463,17 +464,18 @@ INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('23010007', 'CHUNG02-HK2-2425-01', '2025-02-13', 7.9, 8.1),
     ('23010007', 'CNTT103-HK2-2425-01', '2025-02-02', 8.1, 9.1),
     ('23010007', 'CNTT105-HK1-2526-01', '2025-08-31', 9.2, 5.7),
-    ('23010007', 'CNTT106-HK1-2526-01', '2025-09-09', 9.6, 7.3);
-GO
-
-INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
+    ('23010007', 'CNTT106-HK1-2526-01', '2025-09-09', 9.6, 7.3),
     ('23010007', 'CNTT107-HK2-2526-01', '2026-02-13', 8.0, 7.3),
     ('23010007', 'CNTT109-HK2-2526-01', '2026-02-12', 7.7, 7.6),
     ('23010007', 'CNTT110-HK1-2627-01', '2026-09-09', 8.1, NULL),
     ('23010008', 'CHUNG01-HK1-2425-01', '2024-09-10', 8.4, 7.5),
     ('23010008', 'CNTT101-HK1-2425-01', '2024-09-03', 7.0, 7.4),
     ('23010008', 'CNTT103-HK2-2425-01', '2025-02-18', 7.8, 7.9),
-    ('23010008', 'CNTT104-HK2-2425-01', '2025-01-31', 7.6, 6.9),
+    ('23010008', 'CNTT104-HK2-2425-01', '2025-01-31', 7.6, 6.9);
+GO
+
+-- Khoa Ngoại ngữ: 207 lượt đăng ký
+INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('24020001', 'CHUNG01-HK1-2425-02', '2024-09-18', 7.7, 5.9),
     ('24020001', 'NN101-HK1-2425-01', '2024-09-17', 8.3, 5.7),
     ('24020001', 'NN102-HK1-2425-01', '2024-09-04', 5.6, 4.9),
@@ -666,10 +668,7 @@ INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('23020006', 'CHUNG03-HK1-2526-02', '2025-09-08', 8.1, 5.5),
     ('23020006', 'NN105-HK1-2526-01', '2025-08-31', 7.7, 9.3),
     ('23020006', 'NN108-HK2-2526-01', '2026-02-22', 8.3, 6.5),
-    ('23020006', 'NN109-HK2-2526-01', '2026-02-20', 7.6, 7.1);
-GO
-
-INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
+    ('23020006', 'NN109-HK2-2526-01', '2026-02-20', 7.6, 7.1),
     ('23020006', 'NN110-HK1-2627-01', '2026-09-14', 5.6, NULL),
     ('23020007', 'CHUNG01-HK1-2425-02', '2024-09-03', 6.2, 6.4),
     ('23020007', 'NN102-HK1-2425-01', '2024-09-12', 7.0, 4.2),
@@ -683,7 +682,11 @@ INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('23020008', 'CHUNG01-HK1-2425-02', '2024-08-29', 10.0, 9.6),
     ('23020008', 'NN101-HK1-2425-01', '2024-09-16', 9.2, 10.0),
     ('23020008', 'NN103-HK2-2425-01', '2025-01-31', 9.4, 8.3),
-    ('23020008', 'NN104-HK2-2425-01', '2025-02-11', 8.1, 9.1),
+    ('23020008', 'NN104-HK2-2425-01', '2025-02-11', 8.1, 9.1);
+GO
+
+-- Khoa Du lịch: 207 lượt đăng ký
+INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('24030001', 'CHUNG01-HK1-2425-03', '2024-09-08', 7.4, 7.7),
     ('24030001', 'DL101-HK1-2425-01', '2024-09-03', 7.6, 7.1),
     ('24030001', 'DL102-HK1-2425-01', '2024-09-03', 7.3, 7.6),
@@ -869,10 +872,7 @@ INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
     ('23030005', 'DL107-HK2-2526-01', '2026-02-02', 6.9, 7.3),
     ('23030005', 'DL108-HK2-2526-01', '2026-02-06', 7.5, 7.6),
     ('23030005', 'DL110-HK1-2627-01', '2026-08-29', 9.0, NULL),
-    ('23030006', 'DL101-HK1-2425-01', '2024-09-11', 6.5, 7.1);
-GO
-
-INSERT INTO dbo.DangKy (MaSV, MaLHP, NgayDangKy, DiemQT, DiemThi) VALUES
+    ('23030006', 'DL101-HK1-2425-01', '2024-09-11', 6.5, 7.1),
     ('23030006', 'DL102-HK1-2425-01', '2024-09-07', 7.9, 6.5),
     ('23030006', 'CHUNG02-HK2-2425-03', '2025-02-06', 7.0, 10.0),
     ('23030006', 'DL104-HK2-2425-01', '2025-02-23', 7.5, 5.2),
@@ -907,14 +907,31 @@ UNION ALL SELECT N'LopHocPhan', COUNT(*) FROM dbo.LopHocPhan
 UNION ALL SELECT N'DangKy',     COUNT(*) FROM dbo.DangKy;
 GO
 
--- Số dòng theo khoa (mỗi khoa cần >= 20 sinh viên)
-SELECT l.MaKhoa,
-       COUNT(DISTINCT sv.MaSV)   AS SoSinhVien,
-       COUNT(dk.MaLHP)           AS SoLuotDangKy
-FROM dbo.Lop l
-JOIN dbo.SinhVien sv ON sv.MaLop = l.MaLop
-LEFT JOIN dbo.DangKy dk ON dk.MaSV = sv.MaSV
-GROUP BY l.MaKhoa;
+-- Dữ liệu có đúng như thiết kế ở đầu file không (mỗi khoa một dòng; mong đợi: >= 20 | 1 | 1 | 1 | 1 | 2)
+SELECT k.MaKhoa,
+       (SELECT COUNT(*) FROM dbo.SinhVien s JOIN dbo.Lop l ON l.MaLop = s.MaLop WHERE l.MaKhoa = k.MaKhoa) AS SoSinhVien,
+       (SELECT COUNT(*) FROM dbo.SinhVien s JOIN dbo.Lop l ON l.MaLop = s.MaLop
+         WHERE l.MaKhoa = k.MaKhoa AND s.TrangThai = N'Bảo lưu') AS BaoLuu,
+       (SELECT COUNT(*) FROM dbo.SinhVien s JOIN dbo.Lop l ON l.MaLop = s.MaLop
+         WHERE l.MaKhoa = k.MaKhoa AND s.TrangThai = N'Thôi học') AS ThoiHoc,
+       (SELECT COUNT(*) FROM dbo.SinhVien s JOIN dbo.Lop l ON l.MaLop = s.MaLop
+         WHERE l.MaKhoa = k.MaKhoa AND NOT EXISTS (SELECT 1 FROM dbo.DangKy d WHERE d.MaSV = s.MaSV)) AS ChuaDangKy,
+       (SELECT COUNT(*) FROM dbo.GiangVien g
+         WHERE g.MaKhoa = k.MaKhoa AND NOT EXISTS (SELECT 1 FROM dbo.LopHocPhan lp WHERE lp.MaGV = g.MaGV)) AS GVChuaDay,
+       -- phép chia: sinh viên đăng ký đủ MỌI lớp học phần của khoa ở học kỳ 1-4
+       (SELECT COUNT(*) FROM dbo.SinhVien s JOIN dbo.Lop l ON l.MaLop = s.MaLop
+         WHERE l.MaKhoa = k.MaKhoa
+           AND NOT EXISTS (SELECT lp.MaLHP FROM dbo.LopHocPhan lp JOIN dbo.GiangVien g ON g.MaGV = lp.MaGV
+                           WHERE g.MaKhoa = k.MaKhoa AND lp.MaHK <> 'HK1-2627'
+                           EXCEPT SELECT d.MaLHP FROM dbo.DangKy d WHERE d.MaSV = s.MaSV)) AS HocDuMoiLop
+FROM dbo.Khoa k
+ORDER BY k.MaKhoa;
+
+-- Mong đợi: 0 | 0 | > 0 (CHUNG04 chưa có lớp; HK1-2627 chưa có điểm thi; có điểm thấp để truy vấn "không đạt")
+SELECT (SELECT COUNT(*) FROM dbo.LopHocPhan WHERE MaMH = 'CHUNG04') AS LopCHUNG04,
+       (SELECT COUNT(*) FROM dbo.DangKy d JOIN dbo.LopHocPhan lp ON lp.MaLHP = d.MaLHP
+         WHERE lp.MaHK = 'HK1-2627' AND d.DiemThi IS NOT NULL) AS DiemThiHK1_2627,
+       (SELECT COUNT(*) FROM dbo.DangKy WHERE DiemTK < 4) AS SoLuotDiemDuoi4;
 GO
 
 -- Phải trả về 0 dòng: sinh viên đăng ký lớp học phần của khoa khác

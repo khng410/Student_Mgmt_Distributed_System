@@ -26,9 +26,8 @@
    Quy ước điểm: DiemTK = NULL khi chưa đủ DiemQT và DiemThi -> "Chưa có điểm",
    không tính vào điểm trung bình.
 
-   LƯU Ý QUYỀN (làm ở 10_security.sql): VIEW ở TongHop đọc bảng ở database khác.
-   Người dùng phải có user ở cả 5 database hoặc bật DB_CHAINING, nếu không sẽ
-   báo lỗi quyền khi SELECT từ VIEW.
+   LƯU Ý QUYỀN (làm ở 10_security.sql): VIEW đọc bảng của 3 node qua database đại diện (synonym -> Linked Server),
+   nên người dùng cần quyền SELECT ở cả 3 node, nếu không sẽ báo lỗi quyền khi SELECT từ VIEW.
    ===================================================================== */
 
 SET ANSI_NULLS ON;
@@ -40,8 +39,7 @@ GO
 /* ---------- 0. PHẠM VI KHOA CỦA NGƯỜI ĐANG ĐĂNG NHẬP ----------
    Giáo vụ từng khoa chỉ được xem dữ liệu khoa mình; mọi tài khoản khác thấy cả 3 khoa.
    Dùng trong vw_SinhVien_ToanCuc và vw_DangKy_ToanCuc. Thêm giáo vụ mới: thêm một dòng vào VALUES.
-   THẤT BẠI AN TOÀN: thành viên của role rl_GiaoVu (tạo ở 10_security.sql) mà chưa có dòng trong VALUES
-   không thấy khoa nào, thay vì thấy tất cả.
+   THẤT BẠI AN TOÀN: thành viên rl_GiaoVu (10_security.sql) chưa có dòng trong VALUES không thấy khoa nào.
    (Không đặt tên bắt đầu bằng fn_ để không lẫn vào 8 hàm của 08_functions.sql.) */
 CREATE OR ALTER FUNCTION dbo.PhamViKhoaCuaToi ()
 RETURNS TABLE
@@ -53,9 +51,8 @@ RETURN
     )
     SELECT k.MaKhoa
     FROM dbo.Khoa k
-    WHERE EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME() AND g.ma_khoa = k.MaKhoa)
-       OR (ISNULL(IS_MEMBER(N'rl_GiaoVu'), 0) = 0                          -- chưa có role (chạy trước 10) hoặc không phải giáo vụ
-           AND NOT EXISTS (SELECT 1 FROM g WHERE g.tai_khoan = SUSER_SNAME()))
+    WHERE k.MaKhoa IN (SELECT ma_khoa FROM g WHERE tai_khoan = SUSER_SNAME())
+       OR (ISNULL(IS_MEMBER(N'rl_GiaoVu'), 0) = 0 AND SUSER_SNAME() NOT IN (SELECT tai_khoan FROM g))
 );
 GO
 

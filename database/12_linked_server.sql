@@ -1,155 +1,158 @@
 ﻿/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
    File   : 12_linked_server.sql
-   Mục đích: Tạo Linked Server LS_LOCAL (loopback: trỏ về chính máy chủ này) để minh họa
-             truy vấn tên 4 phần  LinkedServer.Database.Schema.Table.
+   Mục đích: Chạy thử truy vấn LIÊN NÚT và truy vấn TỔNG HỢP TOÀN HỆ THỐNG qua Linked Server,
+             chứng minh dữ liệu thật sự lấy từ 4 instance SQL Server khác nhau.
    Người viết: ...............          Ngày: ..../11/2026
-   Chạy sau : 10_security.sql (cần tài khoản lg_daotao)     Chạy lại nhiều lần được.
-   Cần quyền sysadmin.
+   Chạy sau : 11_transactions_concurrency.sql, trên instance điều phối (cổng 14330), tài khoản sysadmin.
+   Chạy lại nhiều lần được; không sửa dữ liệu (mọi lệnh ghi đều ROLLBACK).
 
-   VÌ SAO LOOPBACK: cả 4 node đang là 4 database trên cùng một instance, nên Linked Server
-   trỏ về chính nó. Với instance thứ hai thật, chỉ cần đổi @datasrc trong phần 1.
-
-   QUYỀN DÙNG: chỉ người chạy script và lg_admin được ánh xạ tới LS_LOCAL; các login khác không dùng được
-   (cuối file có kiểm tra bằng lg_bgh). Muốn cho thêm login nào, thêm một sp_addlinkedsrvlogin riêng cho login đó.
-
-   KẾT NỐI: LS_LOCAL đăng nhập lại bằng SQL login lg_daotao (Phòng Đào tạo) nên cần SQL Server
-   bật chế độ đăng nhập hỗn hợp (xem docs/HuongDan.md, mục 1.2). Nếu không bật được,
-   dùng thay thế: sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'TRUE'
-   (đi bằng chính Windows login đang chạy; không cần mật khẩu).
-
-   GIAO DỊCH: lệnh GHI qua Linked Server trong BEGIN TRAN sẽ cần MSDTC (dịch vụ điều phối giao
-   dịch phân tán), dễ lỗi khi demo. Vì vậy file này chỉ ĐỌC qua Linked Server; demo
-   COMMIT/ROLLBACK dùng tên 3 phần (11_transactions_concurrency.sql).
+   Linked Server được tạo ở 02b_node_links.sql (LS_QLSV_CNTT, LS_QLSV_NgoaiNgu, LS_QLSV_DuLich), mỗi cái
+   trỏ tới một instance riêng: qlsv_cntt, qlsv_ngoaingu, qlsv_dulich. Tên 4 phần:
+       LinkedServer.Database.Schema.Table
    ===================================================================== */
 
 SET NOCOUNT ON;
+SET XACT_ABORT ON;
 GO
-USE master;
-GO
-
-/* =====================================================================
-   PHẦN 1. TẠO LINKED SERVER – thử lần lượt các provider cho đến khi kết nối được
-   ===================================================================== */
-DECLARE @srv SYSNAME = @@SERVERNAME, @prov SYSNAME, @ok BIT = 0, @nguoiChay SYSNAME = SUSER_SNAME();
-DECLARE c CURSOR LOCAL FAST_FORWARD FOR
-    SELECT prov FROM (VALUES (1, N'MSOLEDBSQL19'), (2, N'MSOLEDBSQL'), (3, N'SQLNCLI11')) v(thu_tu, prov)
-    ORDER BY thu_tu;
-OPEN c;
-FETCH NEXT FROM c INTO @prov;
-WHILE @@FETCH_STATUS = 0 AND @ok = 0
-BEGIN
-    BEGIN TRY
-        IF EXISTS (SELECT 1 FROM sys.servers WHERE name = N'LS_LOCAL')
-            EXEC sp_dropserver @server = N'LS_LOCAL', @droplogins = 'droplogins';
-
-        EXEC sp_addlinkedserver @server = N'LS_LOCAL', @srvproduct = N'', @provider = @prov,
-             @datasrc = @srv, @provstr = N'TrustServerCertificate=yes';
-        EXEC sp_serveroption @server = N'LS_LOCAL', @optname = N'rpc out', @optvalue = N'true';
-        -- Chỉ ÁNH XẠ cho người chạy script (thường là sysadmin) và lg_admin. KHÔNG dùng @locallogin = NULL:
-        -- NULL nghĩa là mọi login đều đi qua Linked Server với quyền của lg_daotao (qua mặt DENY và phạm vi khoa).
-        EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = @nguoiChay,
-             @rmtuser = N'lg_daotao', @rmtpassword = N'Xe9$Lm47#2026p';
-        IF @nguoiChay <> N'lg_admin'
-            EXEC sp_addlinkedsrvlogin @rmtsrvname = N'LS_LOCAL', @useself = N'FALSE', @locallogin = N'lg_admin',
-                 @rmtuser = N'lg_daotao', @rmtpassword = N'Xe9$Lm47#2026p';
-
-        EXEC sp_testlinkedserver N'LS_LOCAL';       -- lỗi nếu provider thiếu hoặc đăng nhập sai
-        SET @ok = 1;
-        PRINT N'LS_LOCAL đã sẵn sàng, provider = ' + @prov;
-    END TRY
-    BEGIN CATCH
-        PRINT N'Provider ' + @prov + N' không dùng được: ' + ERROR_MESSAGE();
-    END CATCH
-    FETCH NEXT FROM c INTO @prov;
-END
-CLOSE c;
-DEALLOCATE c;
-
-IF @ok = 0
-BEGIN
-    IF EXISTS (SELECT 1 FROM sys.servers WHERE name = N'LS_LOCAL')
-        EXEC sp_dropserver @server = N'LS_LOCAL', @droplogins = 'droplogins';
-    THROW 50120, N'Không tạo được LS_LOCAL: kiểm tra đã chạy 10_security.sql (login lg_daotao), SQL Server bật đăng nhập hỗn hợp và đã cài OLE DB provider.', 1;
-END
-GO
-
-SELECT name AS LinkedServer, provider, data_source, is_rpc_out_enabled
-FROM sys.servers WHERE name = N'LS_LOCAL';
-GO
-
-/* =====================================================================
-   PHẦN 2. TRUY VẤN TÊN 4 PHẦN
-   Gợi ý: bật Actual Execution Plan (Ctrl+M) để thấy toán tử "Remote Query" cho chứng cứ.
-   ===================================================================== */
 USE QLSV_TongHop;
 GO
 
+/* =====================================================================
+   PHẦN 1. CẤU HÌNH – 3 Linked Server và ánh xạ đăng nhập (bằng chứng cấu hình)
+   ===================================================================== */
+SELECT name AS LinkedServer, provider, data_source AS MayChuDich, is_rpc_out_enabled AS RpcOut,
+       is_remote_proc_transaction_promotion_enabled AS GiaoDichPhanTan
+FROM sys.servers WHERE name LIKE N'LS[_]QLSV[_]%' ORDER BY name;
+GO
+
+/* =====================================================================
+   PHẦN 2. CHỨNG MINH DỮ LIỆU NẰM Ở 4 INSTANCE KHÁC NHAU
+   Mỗi dòng do chính instance đó tự báo tên máy chủ và số dòng của nó (OPENQUERY chạy nguyên bên node).
+   ===================================================================== */
+SELECT N'Điều phối' AS Node, @@SERVERNAME AS MayChu,
+       (SELECT COUNT(*) FROM dbo.SinhVien_HoSo) AS SoDong, N'SinhVien_HoSo (mảnh dọc nhạy cảm)' AS Bang
+UNION ALL SELECT N'CNTT', MayChu, SoDong, N'SinhVien (mảnh học vụ)'
+FROM OPENQUERY(LS_QLSV_CNTT, 'SELECT @@SERVERNAME AS MayChu, (SELECT COUNT(*) FROM QLSV_CNTT.dbo.SinhVien) AS SoDong FROM (SELECT 1 AS x) t')
+UNION ALL SELECT N'Ngoại ngữ', MayChu, SoDong, N'SinhVien (mảnh học vụ)'
+FROM OPENQUERY(LS_QLSV_NgoaiNgu, 'SELECT @@SERVERNAME AS MayChu, (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.SinhVien) AS SoDong FROM (SELECT 1 AS x) t')
+UNION ALL SELECT N'Du lịch', MayChu, SoDong, N'SinhVien (mảnh học vụ)'
+FROM OPENQUERY(LS_QLSV_DuLich, 'SELECT @@SERVERNAME AS MayChu, (SELECT COUNT(*) FROM QLSV_DuLich.dbo.SinhVien) AS SoDong FROM (SELECT 1 AS x) t');
+GO
+
+/* =====================================================================
+   PHẦN 3. TRUY VẤN LIÊN NÚT
+   Gợi ý: bật Actual Execution Plan (Ctrl+M) để thấy toán tử "Remote Query" cho chứng cứ.
+   ===================================================================== */
+
 -- Câu 1. Đọc một node qua tên 4 phần: 5 sinh viên đầu của khoa CNTT.
 SELECT TOP (5) MaSV, HoTen, MaLop
-FROM LS_LOCAL.QLSV_CNTT.dbo.SinhVien
+FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien
 ORDER BY MaSV;
 GO
 
 -- Câu 2. Gộp 3 node bằng tên 4 phần rồi so với VIEW toàn cục: hai con số phải bằng nhau.
 SELECT (SELECT COUNT(*) FROM (
-            SELECT MaSV FROM LS_LOCAL.QLSV_CNTT.dbo.SinhVien
-            UNION ALL SELECT MaSV FROM LS_LOCAL.QLSV_NgoaiNgu.dbo.SinhVien
-            UNION ALL SELECT MaSV FROM LS_LOCAL.QLSV_DuLich.dbo.SinhVien) x) AS SoSV_QuaLinkedServer,
-       (SELECT COUNT(*) FROM dbo.vw_SinhVien_ToanCuc)                          AS SoSV_QuaViewToanCuc;
+            SELECT MaSV FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien
+            UNION ALL SELECT MaSV FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.SinhVien
+            UNION ALL SELECT MaSV FROM LS_QLSV_DuLich.QLSV_DuLich.dbo.SinhVien) x) AS SoSV_QuaLinkedServer,
+       (SELECT COUNT(*) FROM dbo.vw_SinhVien_ToanCuc)                              AS SoSV_QuaViewToanCuc;
 GO
 
--- Câu 3. JOIN bảng ở Linked Server với bảng cục bộ ở TongHop: lớp học phần HK1-2627 của khoa Du lịch kèm tên môn.
+-- Câu 3. JOIN liên instance: bảng ở node Du lịch với danh mục MonHoc ở node điều phối.
 SELECT lp.MaLHP, m.TenMH, lp.MaGV, lp.SiSoToiDa
-FROM LS_LOCAL.QLSV_DuLich.dbo.LopHocPhan lp
+FROM LS_QLSV_DuLich.QLSV_DuLich.dbo.LopHocPhan lp
 JOIN dbo.MonHoc m ON m.MaMH = lp.MaMH
 WHERE lp.MaHK = 'HK1-2627'
 ORDER BY lp.MaLHP;
 GO
 
--- Câu 4. OPENQUERY: câu truy vấn chạy NGUYÊN BÊN node (lọc ở xa, chỉ trả về kết quả) - thường nhanh hơn tên 4 phần.
-SELECT * FROM OPENQUERY(LS_LOCAL,
+-- Câu 4. JOIN mảnh dọc: học vụ ở node CNTT ghép với hồ sơ ở node điều phối (hai instance khác nhau).
+SELECT TOP (3) s.MaSV, s.HoTen, s.MaLop, h.CCCD, h.Email
+FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien s
+JOIN dbo.SinhVien_HoSo h ON h.MaSV = s.MaSV
+ORDER BY s.MaSV;
+GO
+
+-- Câu 5. OPENQUERY: câu truy vấn chạy NGUYÊN BÊN node (lọc ở xa, chỉ trả về kết quả) - nhanh hơn tên 4 phần.
+SELECT * FROM OPENQUERY(LS_QLSV_NgoaiNgu,
     'SELECT MaLHP, COUNT(*) AS SoSVDangKy
      FROM QLSV_NgoaiNgu.dbo.DangKy
      GROUP BY MaLHP
      HAVING COUNT(*) >= 10');
 GO
 
--- Câu 5. Chạy lệnh từ xa bằng EXEC ... AT (cần tùy chọn rpc out đã bật ở trên).
-EXEC (N'SELECT COUNT(*) AS SoDangKyOKhoaCNTT FROM QLSV_CNTT.dbo.DangKy') AT LS_LOCAL;
+-- Câu 6. Chạy lệnh từ xa bằng EXEC ... AT (cần tùy chọn rpc out).
+EXEC (N'SELECT @@SERVERNAME AS MayChu, COUNT(*) AS SoDangKyOKhoaCNTT FROM QLSV_CNTT.dbo.DangKy') AT LS_QLSV_CNTT;
 GO
 
--- Câu 6. Thống kê toàn trường qua Linked Server: điểm tổng kết trung bình của mỗi khoa ở HK2-2526.
+/* =====================================================================
+   PHẦN 4. TRUY VẤN TỔNG HỢP TOÀN HỆ THỐNG (lấy dữ liệu từ cả 3 node trong một câu)
+   ===================================================================== */
+
+-- Câu 7. Điểm tổng kết trung bình của mỗi khoa ở HK2-2526, ghép từ 3 instance.
 SELECT x.TenKhoa, CAST(AVG(x.DiemTK) AS DECIMAL(4,2)) AS DiemTB, COUNT(x.DiemTK) AS SoLuotCoDiem
 FROM (
     SELECT N'CNTT' AS TenKhoa, dk.DiemTK
-    FROM LS_LOCAL.QLSV_CNTT.dbo.DangKy dk JOIN LS_LOCAL.QLSV_CNTT.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
+    FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy dk JOIN LS_QLSV_CNTT.QLSV_CNTT.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
     WHERE lp.MaHK = 'HK2-2526'
     UNION ALL
     SELECT N'NN', dk.DiemTK
-    FROM LS_LOCAL.QLSV_NgoaiNgu.dbo.DangKy dk JOIN LS_LOCAL.QLSV_NgoaiNgu.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
+    FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy dk JOIN LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
     WHERE lp.MaHK = 'HK2-2526'
     UNION ALL
     SELECT N'DL', dk.DiemTK
-    FROM LS_LOCAL.QLSV_DuLich.dbo.DangKy dk JOIN LS_LOCAL.QLSV_DuLich.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
+    FROM LS_QLSV_DuLich.QLSV_DuLich.dbo.DangKy dk JOIN LS_QLSV_DuLich.QLSV_DuLich.dbo.LopHocPhan lp ON lp.MaLHP = dk.MaLHP
     WHERE lp.MaHK = 'HK2-2526'
 ) x
 GROUP BY x.TenKhoa
 ORDER BY x.TenKhoa;
 GO
 
--- Thông tin đăng nhập của Linked Server (bằng chứng cấu hình): chỉ có 2 dòng ánh xạ, không có dòng áp dụng cho mọi login
-EXEC sp_helplinkedsrvlogin @rmtsrvname = N'LS_LOCAL';
+-- Câu 8. Cùng bài toán qua VIEW toàn cục (view đọc 3 node bằng synonym): kết quả phải khớp câu 7 về số lượt.
+SELECT TenKhoa, COUNT(DiemTK) AS SoLuotCoDiem
+FROM dbo.vw_BangDiem WHERE MaHK = 'HK2-2526'
+GROUP BY TenKhoa ORDER BY TenKhoa;
 GO
 
--- Kiểm tra bảo mật: login khác KHÔNG dùng được LS_LOCAL (kết quả mong đợi: bị từ chối)
+-- Câu 9. Tổng số sinh viên và số đăng ký của cả trường, mỗi con số do một instance trả về.
+SELECT n.Khoa, n.SoSV, n.SoDangKy, SUM(n.SoSV) OVER () AS TongSVToanTruong, SUM(n.SoDangKy) OVER () AS TongDangKy
+FROM (
+    SELECT N'CNTT' AS Khoa, (SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien) AS SoSV,
+           (SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy) AS SoDangKy
+    UNION ALL SELECT N'NN', (SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.SinhVien),
+                            (SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy)
+    UNION ALL SELECT N'DL', (SELECT COUNT(*) FROM LS_QLSV_DuLich.QLSV_DuLich.dbo.SinhVien),
+                            (SELECT COUNT(*) FROM LS_QLSV_DuLich.QLSV_DuLich.dbo.DangKy)
+) n;
+GO
+
+/* =====================================================================
+   PHẦN 5. GIAO DỊCH PHÂN TÁN (MSDTC): sửa 2 node trong một giao dịch rồi ROLLBACK
+   ===================================================================== */
+BEGIN DISTRIBUTED TRANSACTION;
+    UPDATE LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy       SET DiemThi = 9 WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01';
+    UPDATE LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy SET DiemThi = 9 WHERE MaSV = '24020001' AND MaLHP = 'NN101-HK1-2425-01';
+    SELECT N'Trong giao dịch' AS Buoc,
+           (SELECT DiemThi FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01') AS DiemThiCNTT,
+           (SELECT DiemThi FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy WHERE MaSV = '24020001' AND MaLHP = 'NN101-HK1-2425-01') AS DiemThiNN;
+ROLLBACK TRANSACTION;
+SELECT N'Sau ROLLBACK' AS Buoc,
+       (SELECT DiemThi FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01') AS DiemThiCNTT,
+       (SELECT DiemThi FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.DangKy WHERE MaSV = '24020001' AND MaLHP = 'NN101-HK1-2425-01') AS DiemThiNN;
+GO
+
+/* =====================================================================
+   PHẦN 6. KIỂM TRA BẢO MẬT: quyền ở node do node quyết định
+   lg_bgh (Ban giám hiệu) đi sang node bằng login cùng tên lg_bgh, không có quyền ghi: node từ chối.
+   ===================================================================== */
 EXECUTE AS LOGIN = 'lg_bgh';
 BEGIN TRY
-    SELECT * FROM OPENQUERY(LS_LOCAL, 'SELECT 1 AS x');
-    SELECT N'LỖI BẢO MẬT: lg_bgh dùng được LS_LOCAL' AS KetQua;
+    DELETE FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.DangKy WHERE MaSV = '00000000';
+    SELECT N'LỖI BẢO MẬT: lg_bgh ghi được vào node CNTT' AS KetQua;
 END TRY
 BEGIN CATCH
-    SELECT N'Đúng: lg_bgh bị từ chối' AS KetQua, ERROR_MESSAGE() AS ThongBao;
+    SELECT N'Đúng: node CNTT từ chối lg_bgh' AS KetQua, ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao;
 END CATCH
 REVERT;
 GO

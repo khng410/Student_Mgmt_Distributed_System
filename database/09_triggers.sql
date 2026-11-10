@@ -10,7 +10,7 @@
    #  Trigger                          Bảng (database)            Sự kiện            Việc làm
    1  trg_DangKy_GhiNhatKy             DangKy (3 node)            AFTER UPDATE,DELETE ghi NhatKy khi đổi điểm hoặc xóa đăng ký
    2  trg_SinhVien_ChanXoa             SinhVien (3 node)          INSTEAD OF DELETE   chặn xóa sinh viên đã có đăng ký/điểm
-   3  trg_LopHocPhan_KiemTraMonHoc     LopHocPhan (3 node)        AFTER INSERT,UPDATE MaMH phải có ở danh mục GỐC (QLSV_TongHop)
+   3  trg_LopHocPhan_KiemTraMonHoc     LopHocPhan (3 node)        AFTER INSERT,UPDATE môn phải của khoa giảng viên (hoặc môn chung)
    4  trg_HoSo_KiemTraSinhVien         SinhVien_HoSo (TongHop)    AFTER INSERT,UPDATE MaSV phải có ở một node khoa (thay cho FK
                                                                                       liên database, SQL Server không hỗ trợ)
    5  trg_DangKy_KiemTraDangKy         DangKy (3 node)            AFTER INSERT        chỉ SV đang học, không vượt sĩ số tối đa
@@ -31,6 +31,7 @@
    ===================================================================== */
 
 SET NOCOUNT ON;
+SET XACT_ABORT ON;          -- bắt buộc khi sửa bảng ở node khác instance trong BEGIN TRAN
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
@@ -139,11 +140,15 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+    -- Chỉ dùng dữ liệu của chính node (bản sao MonHoc và GiangVien): không gọi sang instance khác, nên chạy được
+    -- cả trong giao dịch phân tán mà điều phối đang giữ.
     IF EXISTS (SELECT 1 FROM inserted i
-               WHERE NOT EXISTS (SELECT 1 FROM QLSV_TongHop.dbo.MonHoc m WHERE m.MaMH = i.MaMH))
+               JOIN dbo.GiangVien g ON g.MaGV = i.MaGV
+               JOIN dbo.MonHoc m ON m.MaMH = i.MaMH
+               WHERE m.MaKhoa IS NOT NULL AND m.MaKhoa <> g.MaKhoa)
     BEGIN
         ROLLBACK TRANSACTION;
-        THROW 50902, N~Môn học không có trong danh mục gốc ở QLSV_TongHop (bản sao ở node có thể đã cũ).~, 1;
+        THROW 50902, N~Môn học thuộc khoa khác, giảng viên này không được mở lớp.~, 1;
     END
 END'),
 
@@ -203,7 +208,7 @@ FETCH NEXT FROM c INTO @db, @noi;
 WHILE @@FETCH_STATUS = 0
 BEGIN
     SET @sql  = REPLACE(@noi, N'~', N'''');
-    SET @exec = QUOTENAME(@db) + N'.sys.sp_executesql';     -- chạy trong ngữ cảnh database của node
+    SET @exec = N'LS_' + @db + N'.' + QUOTENAME(@db) + N'.sys.sp_executesql';   -- chạy ở instance của node (Linked Server)
     EXEC @exec @sql;                                        -- mỗi lần 1 trigger (CREATE TRIGGER phải đứng đầu batch)
     FETCH NEXT FROM c INTO @db, @noi;
 END
@@ -214,10 +219,10 @@ GO
 -- Kiểm tra cài đặt: 2 trigger ở TongHop + 5 trigger x 3 node = 17 đối tượng, 7 loại trigger
 SELECT db, ten AS Trigger_, bang AS TrenBang
 FROM (
-    SELECT N'QLSV_TongHop' AS db, name AS ten, OBJECT_NAME(parent_id, DB_ID(N'QLSV_TongHop')) AS bang FROM QLSV_TongHop.sys.triggers
-    UNION ALL SELECT N'QLSV_CNTT',     name, OBJECT_NAME(parent_id, DB_ID(N'QLSV_CNTT'))     FROM QLSV_CNTT.sys.triggers
-    UNION ALL SELECT N'QLSV_NgoaiNgu', name, OBJECT_NAME(parent_id, DB_ID(N'QLSV_NgoaiNgu')) FROM QLSV_NgoaiNgu.sys.triggers
-    UNION ALL SELECT N'QLSV_DuLich',   name, OBJECT_NAME(parent_id, DB_ID(N'QLSV_DuLich'))   FROM QLSV_DuLich.sys.triggers
+    SELECT N'QLSV_TongHop' AS db, name AS ten, OBJECT_NAME(parent_id) AS bang FROM sys.triggers
+    UNION ALL SELECT N'QLSV_CNTT', t.name, b.name FROM LS_QLSV_CNTT.QLSV_CNTT.sys.triggers t JOIN LS_QLSV_CNTT.QLSV_CNTT.sys.tables b ON b.object_id = t.parent_id
+    UNION ALL SELECT N'QLSV_NgoaiNgu', t.name, b.name FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.triggers t JOIN LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.tables b ON b.object_id = t.parent_id
+    UNION ALL SELECT N'QLSV_DuLich', t.name, b.name FROM LS_QLSV_DuLich.QLSV_DuLich.sys.triggers t JOIN LS_QLSV_DuLich.QLSV_DuLich.sys.tables b ON b.object_id = t.parent_id
 ) x
 ORDER BY ten, db;
 GO
@@ -254,22 +259,23 @@ BEGIN TRAN;
 ROLLBACK TRAN;
 GO
 
--- Trigger 3: trg_LopHocPhan_KiemTraMonHoc. Môn CNTT999 chỉ có ở bản sao của node, không có ở bản gốc TongHop.
---   Khóa ngoại cục bộ cho qua, trigger chặn lại.
+-- Trigger 3: trg_LopHocPhan_KiemTraMonHoc. Giảng viên khoa CNTT mở lớp cho môn NN101 của khoa Ngoại ngữ (bản sao
+--   của môn này có ở node CNTT nên khóa ngoại cục bộ cho qua, trigger chặn lại).
+--   Khối TRY...CATCH chạy NGAY TRÊN node (EXEC ... sp_executesql từ xa): trigger tự ROLLBACK giao dịch, nếu
+--   chạy trong giao dịch phân tán thì MSDTC báo lỗi 1206 và mất mã lỗi 50902 của trigger.
+EXEC LS_QLSV_CNTT.QLSV_CNTT.sys.sp_executesql N'
 BEGIN TRY
     BEGIN TRAN;
-        INSERT QLSV_CNTT.dbo.MonHoc (MaMH, TenMH, SoTinChi, MaKhoa)
-        VALUES ('CNTT999', N'Môn chỉ có ở bản sao', 3, 'CNTT');
-        INSERT QLSV_CNTT.dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa)
-        VALUES ('CNTT999-HK1-2627-01', 'CNTT999', 'HK1-2627', 1, 'GVCNTT01', 50);
+        INSERT dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa)
+        VALUES (''NN101-HK1-2627-09'', ''NN101'', ''HK1-2627'', 9, ''GVCNTT01'', 50);
     COMMIT;
 END TRY
 BEGIN CATCH
     SELECT ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao;
     IF @@TRANCOUNT > 0 ROLLBACK;
-END CATCH
-SELECT N'Sau lỗi: môn CNTT999 còn ở node không?' AS KiemTra, COUNT(*) AS SoDong
-FROM QLSV_CNTT.dbo.MonHoc WHERE MaMH = 'CNTT999';                -- = 0 (transaction đã bị hủy)
+END CATCH';
+SELECT N'Sau lỗi: lớp NN101-HK1-2627-09 còn ở node không?' AS KiemTra, COUNT(*) AS SoDong
+FROM QLSV_CNTT.dbo.LopHocPhan WHERE MaLHP = 'NN101-HK1-2627-09';   -- = 0 (transaction đã bị hủy)
 GO
 
 -- Trigger 4: trg_HoSo_KiemTraSinhVien. Thêm hồ sơ cho mã sinh viên chưa có ở node nào -> bị chặn.
@@ -292,16 +298,17 @@ BEGIN CATCH
     SELECT ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao;
     IF @@TRANCOUNT > 0 ROLLBACK;
 END CATCH
+EXEC LS_QLSV_CNTT.QLSV_CNTT.sys.sp_executesql N'                          -- chạy trên node, lý do như ở Trigger 3
 BEGIN TRY
     BEGIN TRAN;
-        UPDATE QLSV_CNTT.dbo.LopHocPhan SET SiSoToiDa = 10 WHERE MaLHP = 'CNTT110-HK1-2627-01';
-        INSERT QLSV_CNTT.dbo.DangKy (MaSV, MaLHP) VALUES ('24010016', 'CNTT110-HK1-2627-01');
+        UPDATE dbo.LopHocPhan SET SiSoToiDa = 10 WHERE MaLHP = ''CNTT110-HK1-2627-01'';
+        INSERT dbo.DangKy (MaSV, MaLHP) VALUES (''24010016'', ''CNTT110-HK1-2627-01'');
     COMMIT;
 END TRY
 BEGIN CATCH
     SELECT ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao;
     IF @@TRANCOUNT > 0 ROLLBACK;
-END CATCH
+END CATCH';
 SELECT N'Sau lỗi: sĩ số tối đa đã trở lại' AS KiemTra, SiSoToiDa
 FROM QLSV_CNTT.dbo.LopHocPhan WHERE MaLHP = 'CNTT110-HK1-2627-01';   -- không còn là 10
 GO

@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <title>Kiến trúc phân tán: 4 instance SQL Server nối bằng Linked Server</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#444"/>
+    </marker>
+  </defs>
+  <rect width="1100" height="700" fill="#fff"/>
+  <text x="550" y="28" text-anchor="middle" font-size="18" font-weight="bold">Kiến trúc phân tán: 4 instance SQL Server (Docker), nối bằng Linked Server</text>
+
+  <!-- client -->
+  <rect x="20" y="110" width="150" height="110" rx="10" fill="#f1f1f1" stroke="#555"/>
+  <text x="95" y="135" text-anchor="middle" font-weight="bold">Người dùng</text>
+  <text x="95" y="157" text-anchor="middle">Ứng dụng Streamlit</text>
+  <text x="95" y="175" text-anchor="middle" font-size="11">SSMS / Azure Data Studio</text>
+  <text x="95" y="199" text-anchor="middle" font-size="11" fill="#555">chỉ nối tới node điều phối</text>
+  <line x1="170" y1="165" x2="238" y2="165" stroke="#444" stroke-width="2" marker-end="url(#a)"/>
+  <text x="204" y="156" text-anchor="middle" font-size="11">:14330</text>
+
+  <!-- coordinator -->
+  <rect x="240" y="60" width="330" height="590" rx="12" fill="#e8f0fb" stroke="#2f5fa8" stroke-width="2"/>
+  <text x="405" y="86" text-anchor="middle" font-weight="bold" font-size="15">NODE ĐIỀU PHỐI · instance qlsv_tonghop</text>
+  <text x="405" y="104" text-anchor="middle" font-size="11" fill="#333">cổng máy chủ 14330 · SQL Server 2022 (Docker)</text>
+
+  <rect x="256" y="120" width="298" height="190" rx="8" fill="#fff" stroke="#2f5fa8"/>
+  <text x="405" y="141" text-anchor="middle" font-weight="bold">QLSV_TongHop (dữ liệu THẬT)</text>
+  <text x="270" y="162">• Bản chính: Khoa, HocKy, MonHoc</text>
+  <text x="270" y="180">• Mảnh dọc nhạy cảm: SinhVien_HoSo</text>
+  <text x="270" y="198">• NhatKy (log của điều phối)</text>
+  <text x="270" y="220">• 5 VIEW toàn cục (UNION ALL 3 node)</text>
+  <text x="270" y="238">• 14 thủ tục · 8 hàm · 2 trigger</text>
+  <text x="270" y="256">• Role: rl_DaoTao, rl_GiaoVu, rl_BGH</text>
+  <text x="270" y="274">• Phạm vi khoa: PhamViKhoaCuaToi</text>
+  <text x="270" y="296" font-size="11" fill="#555">Ứng dụng và view chỉ đọc nơi này</text>
+
+  <rect x="256" y="326" width="298" height="70" rx="8" fill="#fff" stroke="#2f5fa8"/>
+  <text x="405" y="346" text-anchor="middle" font-weight="bold">QLSV_TapTrung</text>
+  <text x="270" y="366">CSDL tập trung gốc: nguồn phân mảnh,</text>
+  <text x="270" y="384">dùng kiểm tra tái thiết (ghép lại = gốc)</text>
+
+  <rect x="256" y="412" width="298" height="140" rx="8" fill="#fff" stroke="#2f5fa8" stroke-dasharray="6 4"/>
+  <text x="405" y="432" text-anchor="middle" font-weight="bold">QLSV_CNTT · QLSV_NgoaiNgu · QLSV_DuLich</text>
+  <text x="405" y="450" text-anchor="middle" font-size="12">database ĐẠI DIỆN (vỏ rỗng)</text>
+  <text x="270" y="474">Mỗi bảng là một SYNONYM:</text>
+  <text x="270" y="492" font-family="Menlo, monospace" font-size="11">dbo.SinhVien → LS_QLSV_CNTT.</text>
+  <text x="270" y="508" font-family="Menlo, monospace" font-size="11">          QLSV_CNTT.dbo.SinhVien</text>
+  <text x="270" y="532" font-size="11" fill="#555">nên tên 3 phần cũ vẫn chạy được</text>
+
+  <rect x="256" y="568" width="298" height="68" rx="8" fill="#fdf3d8" stroke="#b07d00"/>
+  <text x="405" y="588" text-anchor="middle" font-weight="bold">3 Linked Server (OLE DB MSOLEDBSQL)</text>
+  <text x="270" y="607" font-size="12">LS_QLSV_CNTT · _NgoaiNgu · _DuLich</text>
+  <text x="270" y="625" font-size="11" fill="#555">mỗi login đi bằng login cùng tên ở node · MSDTC</text>
+
+  <!-- nodes -->
+  <g>
+    <rect x="800" y="60" width="280" height="170" rx="12" fill="#e6f4ea" stroke="#2e7d32" stroke-width="2"/>
+    <text x="940" y="84" text-anchor="middle" font-weight="bold" font-size="15">NODE 1 · khoa CNTT</text>
+    <text x="940" y="102" text-anchor="middle" font-size="11">instance qlsv_cntt · cổng 14331</text>
+    <text x="816" y="126" font-weight="bold">QLSV_CNTT (MaKhoa = 'CNTT')</text>
+    <text x="816" y="146">GiangVien, Lop, SinhVien (học vụ)</text>
+    <text x="816" y="164">LopHocPhan, DangKy, NhatKy</text>
+    <text x="816" y="182">Bản sao Khoa, HocKy, MonHoc</text>
+    <text x="816" y="200">5 trigger · index IX_DangKy_MaLHP</text>
+    <text x="816" y="218" font-size="11" fill="#555">24 SV · 207 lượt đăng ký</text>
+  </g>
+  <g>
+    <rect x="800" y="265" width="280" height="170" rx="12" fill="#fff0e1" stroke="#c76a00" stroke-width="2"/>
+    <text x="940" y="289" text-anchor="middle" font-weight="bold" font-size="15">NODE 2 · khoa Ngoại ngữ</text>
+    <text x="940" y="307" text-anchor="middle" font-size="11">instance qlsv_ngoaingu · cổng 14332</text>
+    <text x="816" y="331" font-weight="bold">QLSV_NgoaiNgu (MaKhoa = 'NN')</text>
+    <text x="816" y="351">GiangVien, Lop, SinhVien (học vụ)</text>
+    <text x="816" y="369">LopHocPhan, DangKy, NhatKy</text>
+    <text x="816" y="387">Bản sao Khoa, HocKy, MonHoc</text>
+    <text x="816" y="405">5 trigger · index IX_DangKy_MaLHP</text>
+    <text x="816" y="423" font-size="11" fill="#555">24 SV · 207 lượt đăng ký</text>
+  </g>
+  <g>
+    <rect x="800" y="470" width="280" height="170" rx="12" fill="#f3e8fb" stroke="#7b3fa0" stroke-width="2"/>
+    <text x="940" y="494" text-anchor="middle" font-weight="bold" font-size="15">NODE 3 · khoa Du lịch</text>
+    <text x="940" y="512" text-anchor="middle" font-size="11">instance qlsv_dulich · cổng 14333</text>
+    <text x="816" y="536" font-weight="bold">QLSV_DuLich (MaKhoa = 'DL')</text>
+    <text x="816" y="556">GiangVien, Lop, SinhVien (học vụ)</text>
+    <text x="816" y="574">LopHocPhan, DangKy, NhatKy</text>
+    <text x="816" y="592">Bản sao Khoa, HocKy, MonHoc</text>
+    <text x="816" y="610">5 trigger · index IX_DangKy_MaLHP</text>
+    <text x="816" y="628" font-size="11" fill="#555">24 SV · 207 lượt đăng ký</text>
+  </g>
+
+  <!-- links -->
+  <line x1="554" y1="602" x2="798" y2="150" stroke="#444" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+  <line x1="554" y1="602" x2="798" y2="350" stroke="#444" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+  <line x1="554" y1="602" x2="798" y2="555" stroke="#444" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+  <rect x="610" y="440" width="150" height="62" rx="6" fill="#fff" stroke="#999"/>
+  <text x="685" y="458" text-anchor="middle" font-size="11" font-weight="bold">Truy vấn / giao dịch</text>
+  <text x="685" y="473" text-anchor="middle" font-size="11">tên 4 phần, OPENQUERY,</text>
+  <text x="685" y="488" text-anchor="middle" font-size="11">BEGIN DISTRIBUTED TRAN</text>
+
+  <text x="550" y="680" text-anchor="middle" font-size="11" fill="#555">Phân mảnh: nhân bản (Khoa, HocKy, MonHoc) · ngang theo MaKhoa (GiangVien, Lop, SinhVien, LopHocPhan, DangKy) · dọc (SinhVien: học vụ ở node khoa, SinhVien_HoSo ở điều phối)</text>
+</svg>

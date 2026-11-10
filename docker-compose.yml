@@ -1,0 +1,54 @@
+# 4 instance SQL Server thật (image amd64, chạy qua giả lập trên Mac Apple Silicon).
+# Mật khẩu sa lấy từ file .env (xem .env.example), dùng chung cho 4 instance; chỉ cho môi trường học tập.
+# Cổng chỉ mở cho máy này (127.0.0.1), không mở ra mạng chung. Dữ liệu nằm trong volume riêng của từng node.
+x-sql: &sql
+  image: mcr.microsoft.com/mssql/server:2022-latest
+  platform: linux/amd64
+  environment: &env
+    ACCEPT_EULA: "Y"
+    MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Chưa có .env: sao chép .env.example thành .env và đặt mật khẩu}"
+    MSSQL_MEMORY_LIMIT_MB: "1024"
+    MSSQL_RPC_PORT: "135"            # MSDTC: giao dịch phân tán giữa các instance
+    MSSQL_DTC_TCP_PORT: "51000"
+  networks: [qlsv]
+  healthcheck:                       # "healthy" khi đăng nhập được và chạy được một câu SELECT
+    test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b"]
+    interval: 10s
+    timeout: 10s
+    retries: 30
+    start_period: 30s
+
+services:
+  tonghop:                           # node điều phối + CSDL tập trung
+    <<: *sql
+    container_name: qlsv_tonghop
+    hostname: qlsv_tonghop
+    ports: ["127.0.0.1:14330:1433"]
+    volumes: ["data_tonghop:/var/opt/mssql"]
+  cntt:
+    <<: *sql
+    container_name: qlsv_cntt
+    hostname: qlsv_cntt
+    ports: ["127.0.0.1:14331:1433"]
+    volumes: ["data_cntt:/var/opt/mssql"]
+  ngoaingu:
+    <<: *sql
+    container_name: qlsv_ngoaingu
+    hostname: qlsv_ngoaingu
+    ports: ["127.0.0.1:14332:1433"]
+    volumes: ["data_ngoaingu:/var/opt/mssql"]
+  dulich:
+    <<: *sql
+    container_name: qlsv_dulich
+    hostname: qlsv_dulich
+    ports: ["127.0.0.1:14333:1433"]
+    volumes: ["data_dulich:/var/opt/mssql"]
+
+volumes:
+  data_tonghop:
+  data_cntt:
+  data_ngoaingu:
+  data_dulich:
+
+networks:
+  qlsv: {}

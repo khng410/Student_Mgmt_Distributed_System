@@ -36,6 +36,29 @@ GO
 USE QLSV_TongHop;
 GO
 
+/* ---------- Hàm phụ: tên database (đã đặt trong ngoặc vuông) của node giữ dữ liệu một khoa ----------
+   Các thủ tục ghép tên này vào SQL động để chạy đúng node. Mã khoa lạ trả về NULL.
+   (Không đặt tên bắt đầu bằng fn_ để không lẫn vào 8 hàm của 08_functions.sql.) */
+CREATE OR ALTER FUNCTION dbo.DbCuaKhoa (@MaKhoa VARCHAR(10))
+RETURNS SYSNAME
+AS
+BEGIN
+    RETURN QUOTENAME(CASE @MaKhoa WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END);
+END
+GO
+
+/* ---------- Hàm phụ: lớp này thuộc khoa nào (tìm ở cả 3 node); không có lớp trả về NULL ---------- */
+CREATE OR ALTER FUNCTION dbo.KhoaCuaLop (@MaLop VARCHAR(15))
+RETURNS VARCHAR(10)
+AS
+BEGIN
+    RETURN (SELECT MaKhoa FROM (SELECT MaLop, MaKhoa FROM QLSV_CNTT.dbo.Lop
+                                UNION ALL SELECT MaLop, MaKhoa FROM QLSV_NgoaiNgu.dbo.Lop
+                                UNION ALL SELECT MaLop, MaKhoa FROM QLSV_DuLich.dbo.Lop) l
+            WHERE l.MaLop = @MaLop);
+END
+GO
+
 
 /* ---------- 1. sp_DongBoDanhMuc ----------
    Chép thay đổi của danh mục từ bản chính (TongHop) xuống node khoa:
@@ -136,23 +159,19 @@ BEGIN
 
     DECLARE @k VARCHAR(10), @db SYSNAME, @sql NVARCHAR(MAX);
 
-    SELECT @k = MaKhoa FROM (
-        SELECT MaLop, MaKhoa FROM QLSV_CNTT.dbo.Lop
-        UNION ALL SELECT MaLop, MaKhoa FROM QLSV_NgoaiNgu.dbo.Lop
-        UNION ALL SELECT MaLop, MaKhoa FROM QLSV_DuLich.dbo.Lop) l
-    WHERE l.MaLop = @MaLop;
+    SET @k = dbo.KhoaCuaLop(@MaLop);
 
     IF @k IS NULL
         THROW 50010, N'Không tìm thấy lớp này ở node nào.', 1;
     IF EXISTS (SELECT 1 FROM dbo.SinhVien_HoSo WHERE MaSV = @MaSV)
         THROW 50011, N'Mã sinh viên đã tồn tại.', 1;
 
-    SET @db = CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END;
+    SET @db = dbo.DbCuaKhoa(@k);
 
     BEGIN TRY
         BEGIN TRAN;
 
-        SET @sql = N'INSERT ' + QUOTENAME(@db) + N'.dbo.SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, MaLop)
+        SET @sql = N'INSERT ' + @db + N'.dbo.SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, MaLop)
                      VALUES (@MaSV, @HoTen, @NgaySinh, @GioiTinh, @MaLop);';
         EXEC sp_executesql @sql,
              N'@MaSV CHAR(8), @HoTen NVARCHAR(100), @NgaySinh DATE, @GioiTinh NVARCHAR(3), @MaLop VARCHAR(15)',
@@ -193,20 +212,16 @@ BEGIN
     IF @kCu IS NULL
         THROW 50020, N'Không tìm thấy sinh viên.', 1;
 
-    SELECT @kMoi = MaKhoa FROM (
-        SELECT MaLop, MaKhoa FROM QLSV_CNTT.dbo.Lop
-        UNION ALL SELECT MaLop, MaKhoa FROM QLSV_NgoaiNgu.dbo.Lop
-        UNION ALL SELECT MaLop, MaKhoa FROM QLSV_DuLich.dbo.Lop) l
-    WHERE l.MaLop = @MaLopMoi;
+    SET @kMoi = dbo.KhoaCuaLop(@MaLopMoi);
     IF @kMoi IS NULL
         THROW 50021, N'Không tìm thấy lớp mới.', 1;
     IF @kMoi = @kCu
         THROW 50022, N'Lớp mới cùng khoa với khoa hiện tại, không cần chuyển node.', 1;
 
-    SET @dbCu  = CASE @kCu  WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END;
-    SET @dbMoi = CASE @kMoi WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END;
+    SET @dbCu  = dbo.DbCuaKhoa(@kCu);
+    SET @dbMoi = dbo.DbCuaKhoa(@kMoi);
 
-    SET @sql = N'SELECT @soDK = COUNT(*) FROM ' + QUOTENAME(@dbCu) + N'.dbo.DangKy WHERE MaSV = @MaSV;';
+    SET @sql = N'SELECT @soDK = COUNT(*) FROM ' + @dbCu + N'.dbo.DangKy WHERE MaSV = @MaSV;';
     EXEC sp_executesql @sql, N'@MaSV CHAR(8), @soDK INT OUTPUT', @MaSV, @soDK OUTPUT;
     IF @soDK > 0
         THROW 50023, N'Sinh viên đã có đăng ký học phần ở khoa cũ, không thể chuyển khoa.', 1;
@@ -214,10 +229,10 @@ BEGIN
     BEGIN TRY
         BEGIN TRAN;
 
-        SET @sql = N'INSERT ' + QUOTENAME(@dbMoi) + N'.dbo.SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai)
+        SET @sql = N'INSERT ' + @dbMoi + N'.dbo.SinhVien (MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai)
                      SELECT MaSV, HoTen, NgaySinh, GioiTinh, @MaLopMoi, TrangThai
-                     FROM ' + QUOTENAME(@dbCu) + N'.dbo.SinhVien WHERE MaSV = @MaSV;
-                     DELETE FROM ' + QUOTENAME(@dbCu) + N'.dbo.SinhVien WHERE MaSV = @MaSV;';
+                     FROM ' + @dbCu + N'.dbo.SinhVien WHERE MaSV = @MaSV;
+                     DELETE FROM ' + @dbCu + N'.dbo.SinhVien WHERE MaSV = @MaSV;';
         EXEC sp_executesql @sql, N'@MaSV CHAR(8), @MaLopMoi VARCHAR(15)', @MaSV, @MaLopMoi;
 
         COMMIT;
@@ -253,7 +268,7 @@ BEGIN
     IF @tt <> N'Đang học'
         THROW 50031, N'Chỉ sinh viên đang học mới được đăng ký học phần.', 1;
 
-    SET @db = QUOTENAME(CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END);
+    SET @db = dbo.DbCuaKhoa(@k);
 
     BEGIN TRY
         BEGIN TRAN;
@@ -309,7 +324,7 @@ BEGIN
     IF @k IS NULL
         THROW 50042, N'Không tìm thấy sinh viên.', 1;
 
-    SET @db = QUOTENAME(CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END);
+    SET @db = dbo.DbCuaKhoa(@k);
     SET @sql = N'UPDATE ' + @db + N'.dbo.DangKy
                  SET DiemQT = ISNULL(@DiemQT, DiemQT), DiemThi = ISNULL(@DiemThi, DiemThi)
                  WHERE MaSV = @MaSV AND MaLHP = @MaLHP;
@@ -410,12 +425,12 @@ BEGIN
     IF @k IS NULL
         THROW 50060, N'Không tìm thấy sinh viên.', 1;
 
-    SET @db = CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END;
+    SET @db = dbo.DbCuaKhoa(@k);
 
     BEGIN TRY
         BEGIN TRAN;
 
-        SET @sql = N'UPDATE ' + QUOTENAME(@db) + N'.dbo.SinhVien
+        SET @sql = N'UPDATE ' + @db + N'.dbo.SinhVien
                      SET HoTen = ISNULL(@HoTen, HoTen), NgaySinh = ISNULL(@NgaySinh, NgaySinh),
                          GioiTinh = ISNULL(@GioiTinh, GioiTinh), TrangThai = ISNULL(@TrangThai, TrangThai)
                      WHERE MaSV = @MaSV;';
@@ -455,7 +470,7 @@ BEGIN
     IF @k IS NULL
         THROW 50061, N'Không tìm thấy sinh viên.', 1;
 
-    SET @db = QUOTENAME(CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END);
+    SET @db = dbo.DbCuaKhoa(@k);
     SET @sql = N'SELECT @soDK = COUNT(*) FROM ' + @db + N'.dbo.DangKy WHERE MaSV = @MaSV;';
     EXEC sp_executesql @sql, N'@MaSV CHAR(8), @soDK INT OUTPUT', @MaSV, @soDK OUTPUT;
     IF @soDK > 0
@@ -492,7 +507,7 @@ BEGIN
     IF @k IS NULL
         THROW 50070, N'Không tìm thấy sinh viên.', 1;
 
-    SET @db = QUOTENAME(CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END);
+    SET @db = dbo.DbCuaKhoa(@k);
     SET @sql = N'SELECT @ton = COUNT(*),
                         @coDiem = COUNT(CASE WHEN DiemQT IS NOT NULL OR DiemThi IS NOT NULL THEN 1 END)
                  FROM ' + @db + N'.dbo.DangKy WHERE MaSV = @MaSV AND MaLHP = @MaLHP;';
@@ -578,8 +593,8 @@ BEGIN
                    UNION ALL SELECT MaLHP FROM QLSV_DuLich.dbo.LopHocPhan) x WHERE x.MaLHP = @MaLHP)
         THROW 50084, N'Mã lớp học phần đã tồn tại ở một node; hãy đổi Nhom.', 1;
 
-    SET @db = CASE @k WHEN 'CNTT' THEN N'QLSV_CNTT' WHEN 'NN' THEN N'QLSV_NgoaiNgu' WHEN 'DL' THEN N'QLSV_DuLich' END;
-    SET @sql = N'INSERT ' + QUOTENAME(@db) + N'.dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa, PhongHoc)
+    SET @db = dbo.DbCuaKhoa(@k);
+    SET @sql = N'INSERT ' + @db + N'.dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa, PhongHoc)
                  VALUES (@MaLHP, @MaMH, @MaHK, @Nhom, @MaGV, @SiSoToiDa, @PhongHoc);';
     EXEC sp_executesql @sql,
          N'@MaLHP VARCHAR(20), @MaMH VARCHAR(10), @MaHK VARCHAR(10), @Nhom TINYINT, @MaGV VARCHAR(10), @SiSoToiDa SMALLINT, @PhongHoc VARCHAR(10)',

@@ -20,6 +20,8 @@
    Thang xếp loại (khớp sp_ThongKeKhoa): Giỏi >= 8; Khá >= 6,5; Trung bình >= 5;
    Yếu >= 4; Không đạt < 4.
    Hàm không thể dùng SQL động, nên các hàm đọc thẳng qua VIEW ở 05_views.sql.
+   Hàm 7 và 8 tự gom nhóm điểm TB thay vì gọi hàm 2 cho từng dòng: mỗi lần gọi hàm scalar là một lượt
+   đọc VIEW qua 3 node, gọi cho cả lớp sẽ chậm hơn nhiều.
    Phần cuối file có câu SELECT gọi thử cho cả 8 hàm.
    ===================================================================== */
 
@@ -189,13 +191,13 @@ SELECT * FROM dbo.fn_TopSinhVien('CNTT', 5, 8);
 SELECT * FROM dbo.fn_TopSinhVien(NULL,   5, 8);
 GO
 
--- Kiểm tra nhất quán: điểm TB tích lũy từ hàm phải bằng điểm tính trực tiếp từ VIEW (kết quả mong đợi: 0 dòng)
-SELECT s.MaSV
-FROM dbo.vw_SinhVien_ToanCuc s
-CROSS APPLY (SELECT CAST(SUM(DiemTK * SoTinChi)
-                         / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS TB
-             FROM dbo.vw_BangDiem b WHERE b.MaSV = s.MaSV) x
-WHERE ISNULL(x.TB, -1) <> ISNULL(dbo.fn_DiemTBTichLuy(s.MaSV), -1);
+-- Kiểm tra chéo: điểm TB tích lũy tính theo 2 cách độc lập phải bằng nhau (mong đợi: 0 dòng)
+--   fn_DiemTBTichLuy (scalar, từng sinh viên) và fn_DanhSachLop (gom nhóm cả lớp) dùng cùng công thức
+--   nhưng viết riêng; nếu một trong hai sai, các dòng lệch hiện ra ở đây.
+SELECT l.MaLop, d.MaSV, d.DiemTBTichLuy AS TheoDanhSachLop, dbo.fn_DiemTBTichLuy(d.MaSV) AS TheoHamScalar
+FROM (SELECT DISTINCT MaLop FROM dbo.vw_SinhVien_ToanCuc) l
+CROSS APPLY dbo.fn_DanhSachLop(l.MaLop) d
+WHERE ISNULL(d.DiemTBTichLuy, -1) <> ISNULL(dbo.fn_DiemTBTichLuy(d.MaSV), -1);
 GO
 
 -- Đếm: phải đúng 8 hàm do file này tạo (5 scalar FN + 3 inline table-valued IF)
