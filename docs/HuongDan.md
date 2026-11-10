@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng và kiểm thử
+﻿# Hướng dẫn sử dụng và kiểm thử
 
 Tài liệu gộp các hướng dẫn của đồ án. Mật khẩu các tài khoản nằm ở phần 1 của `database/10_security.sql`.
 
@@ -460,4 +460,49 @@ Mỗi khối demo đều có **bằng chứng tự kiểm** ngay trong kết qu�
 | | | Phần 6 | Node từ chối lg_bgh, lỗi 229 |
 
 Hai phần B và C cần 2 cửa sổ nên `kiem_tra_demo.py` không chạy tự động; làm theo các bước ghi trong comment của file.
+
+**Demo trên giao diện:** đăng nhập ứng dụng bằng `lg_admin`, mở trang **Kiểm thử** (nhóm Quản trị) và bấm **Chạy 13 ca kiểm thử**.
+Mỗi ca hiện ✅ hoặc ❌, kết quả mong đợi, bảng kết quả thật và câu SQL đã chạy. Trang này có cả 5 trigger chặn lỗi (50901–50905),
+vốn không chạy tới được từ các trang nghiệp vụ vì thủ tục đã chặn trước. Các ca đều hoàn tác nên dữ liệu không đổi.
+
+### 6.4. Demo sự khác nhau giữa 4 vai trò
+
+**Tạo 4 kết nối** trong SQLPro for MSSQL (hoặc SSMS, Azure Data Studio), mỗi vai trò một kết nối để chuyển qua lại nhanh khi demo:
+
+| Ô trong hộp thoại kết nối | Giá trị |
+| --- | --- |
+| Alias | tên vai trò, ví dụ `1 Quản trị`, `2 Đào tạo`, `3 Giáo vụ CNTT`, `4 Ban giám hiệu`; chọn mỗi kết nối một màu |
+| Server host | `localhost,14330` (instance điều phối). **Phải có `,14330`**: thiếu cổng thì công cụ nối vào cổng mặc định 1433 |
+| Port | để trống (`<auto>`) |
+| Authentication | SQL Server authentication |
+| Login / Password | `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh` với mật khẩu ở bảng mục 1 |
+| Database | `QLSV_TongHop` |
+| Advanced | nếu báo lỗi chứng chỉ: bật **Trust server certificate** |
+
+Nếu báo `Host is unavailable or does not exist (Msg 20009)`: thường là quên `,14330` nên công cụ đi tìm cổng 1433 (cổng của
+container `sql_server_local` cũ, không thuộc đồ án). Kiểm tra lại ô Server host và `docker compose ps` (4 container phải `healthy`).
+
+Luôn nối vào **cổng 14330** (điều phối): phân quyền theo vai trò nằm ở đây. Nối thẳng vào cổng node (14331–14333) sẽ bỏ qua
+lớp phân quyền này (xem README, mục "Giới hạn đã biết").
+
+**Chạy** `database/14_demo_vai_tro.sql` ở từng kết nối. File thử cùng 8 việc và trả về **một bảng** "Được / BỊ TỪ CHỐI";
+mọi lệnh ghi đều hoàn tác. Đặt 4 bảng cạnh nhau là thấy ngay sự khác nhau. Kết quả đúng (đã chạy thử):
+
+| # | Thử làm | `lg_admin` | `lg_daotao` | `lg_giaovu_cntt` | `lg_bgh` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Xem danh sách sinh viên | 72 | 72 | **24** (chỉ khoa CNTT) | từ chối |
+| 2 | Xem thống kê | 3 khoa | 3 khoa | **1 khoa** | 3 khoa |
+| 3 | Xem bảng điểm chi tiết | 621 | 621 | 207 | từ chối |
+| 4 | Xem CCCD qua view | được | được | từ chối | từ chối |
+| 5 | Đọc thẳng bảng `SinhVien_HoSo` | được | **từ chối** (chỉ qua view) | từ chối | từ chối |
+| 6 | Nhập điểm sinh viên CNTT | được | được | được | từ chối |
+| 7 | Nhập điểm sinh viên Ngoại ngữ | được | được | **từ chối** ("Không tìm thấy sinh viên": khoa khác bị lọc khỏi tầm nhìn) | từ chối |
+| 8 | Tạo bảng mới (sửa cấu trúc) | **được** | từ chối | từ chối | từ chối |
+
+Cách nói khi demo: dòng 8 là khác biệt giữa **Quản trị** và **Đào tạo**; dòng 5 là DENY trên bảng nhạy cảm dù được xem qua view;
+dòng 1, 2, 7 là **phạm vi khoa** của giáo vụ; Ban giám hiệu **chỉ xem thống kê** (dòng 2) và bị từ chối mọi thứ khác.
+Mã lỗi 229 = không có quyền trên đối tượng, 262 = không có quyền tạo đối tượng.
+
+Muốn xem chi tiết từng ca kèm GRANT nhầm → REVOKE → DENY: chạy phần 6 của `10_security.sql` bằng `sa` (dùng `EXECUTE AS LOGIN`
+nên không cần đổi kết nối).
 

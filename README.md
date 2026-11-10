@@ -50,7 +50,7 @@ Kiểm thử đồng bộ: `13_dong_bo_kiem_thu.sql`. Mất kết nối: `script
 ## Cấu trúc thư mục
 
 ```
-database/   14 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b)
+database/   15 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b; 14 là file demo vai trò)
 scripts/    chay_sql.py (chạy file .sql), trien_khai.py (dựng lại cả 4 instance bằng một lệnh),
             thu_mat_ket_noi.py (dừng một node, thử, bật lại, đồng bộ lại),
             kiem_tra_demo.py (chạy 5 file demo, in ĐÚNG / SAI cho từng kết quả cần trình bày)
@@ -106,6 +106,7 @@ Mọi file chạy lại được nhiều lần; file lưu UTF-8 có BOM để ti
 | 11 | `11_transactions_concurrency.sql` | COMMIT, ROLLBACK; blocking, deadlock (2 cửa sổ, nằm trong comment); hiệu năng và index (phần E) |
 | 12 | `12_linked_server.sql` | Truy vấn liên nút và tổng hợp toàn hệ thống qua Linked Server (tên 4 phần, OPENQUERY, giao dịch phân tán) |
 | 13 | `13_dong_bo_kiem_thu.sql` | Kiểm thử đồng bộ: đổi ở một nơi, kiểm tra ở cả 4 nơi (thêm, sửa, chuyển khoa, xóa, danh mục); mọi thay đổi đều ROLLBACK |
+| 14 | `14_demo_vai_tro.sql` | Demo khác nhau giữa các vai trò: chạy 4 lần, mỗi lần bằng một tài khoản (không chạy bằng `sa`, không nằm trong `trien_khai.py`) |
 
 Sau khi chạy `04` và `05`, các bảng kiểm tra ở cuối file phải cho `Thieu = Thua = 0`.
 Chạy lại `02` hoặc `02a` thì phải chạy lại từ `02b` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
@@ -143,6 +144,7 @@ Chức năng theo vai trò:
 | Ban giám hiệu | Thống kê |
 | Giáo vụ | Thống kê, Tìm kiếm, Bảng điểm, Nhập điểm (chỉ khoa mình) |
 | Đào tạo, Quản trị | Các trang trên và thêm: Sinh viên (thêm, sửa, xóa, chuyển khoa), Đăng ký học phần, Lớp học phần, Phân tán (sơ đồ node, demo COMMIT/ROLLBACK), Nhật ký |
+| Quản trị | Thêm trang **Kiểm thử**: chạy 13 ca kiểm thử hàm, thủ tục, trigger (kể cả trigger chặn lỗi), mỗi ca báo ĐÚNG/SAI; mọi thay đổi đều được hoàn tác |
 
 Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa chỉ trang, không giới hạn thời gian mặc định
 (`PHIEN_PHUT` trong `config.py`). Không chia sẻ địa chỉ khi đang đăng nhập.

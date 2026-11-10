@@ -28,7 +28,7 @@ VAI_TRO = {
 }
 GIAOVU = ["Thống kê", "Tìm kiếm", "Bảng điểm", "Nhập điểm"]
 DAOTAO = GIAOVU + ["Sinh viên", "Đăng ký học phần", "Lớp học phần", "Phân tán", "Nhật ký"]
-MENU = {"lg_bgh": ["Thống kê"], "lg_daotao": DAOTAO, "lg_admin": DAOTAO,
+MENU = {"lg_bgh": ["Thống kê"], "lg_daotao": DAOTAO, "lg_admin": DAOTAO + ["Kiểm thử"],
         "lg_giaovu_cntt": GIAOVU, "lg_giaovu_nn": GIAOVU, "lg_giaovu_dl": GIAOVU}
 
 KHOA = {None: "Toàn trường", "CNTT": "CNTT", "NN": "Ngoại ngữ", "DL": "Du lịch"}
@@ -59,15 +59,16 @@ NHAN_COT = {"DiemQT": "Điểm quá trình", "DiemThi": "Điểm thi", "DiemTK":
             "SoMonCoDiem": "Số môn có điểm", "TinChiTichLuy": "Tín chỉ tích lũy", "NodeKhoa": "Node",
             "ThoiGian": "Thời gian", "TenBang": "Bảng", "HanhDong": "Hành động", "KhoaChinh": "Khóa chính",
             "NoiDungCu": "Trước", "NoiDungMoi": "Sau", "NguoiThucHien": "Người thực hiện", "Node": "Node",
-            "CCCD": "CCCD", "DienThoai": "Điện thoại", "Email": "Email", "DiaChi": "Địa chỉ"}
+            "CCCD": "CCCD", "DienThoai": "Điện thoại", "Email": "Email", "DiaChi": "Địa chỉ",
+            "MaLoi": "Mã lỗi", "ThongBao": "Thông báo"}
 
 # Thanh bên: chức năng chia nhóm, mỗi chức năng một biểu tượng (Material Symbols) và một dòng mô tả dưới tiêu đề trang
 NHOM_MENU = [("Tổng quan", ["Thống kê"]), ("Tra cứu", ["Tìm kiếm", "Bảng điểm"]),
              ("Nghiệp vụ", ["Nhập điểm", "Sinh viên", "Đăng ký học phần", "Lớp học phần"]),
-             ("Hệ thống phân tán", ["Phân tán", "Nhật ký"])]
+             ("Hệ thống phân tán", ["Phân tán", "Nhật ký"]), ("Quản trị", ["Kiểm thử"])]
 BIEU_TUONG = {"Thống kê": "monitoring", "Tìm kiếm": "search", "Bảng điểm": "grading", "Nhập điểm": "edit_note",
               "Sinh viên": "group", "Đăng ký học phần": "how_to_reg", "Lớp học phần": "class",
-              "Phân tán": "hub", "Nhật ký": "history"}
+              "Phân tán": "hub", "Nhật ký": "history", "Kiểm thử": "science"}
 MO_TA = {"Thống kê": "Kết quả học tập theo khoa và học kỳ, tổng hợp từ cả 3 node.",
          "Tìm kiếm": "Tìm sinh viên toàn trường theo mã, họ tên (không cần gõ dấu), khoa, lớp, trạng thái.",
          "Bảng điểm": "Bảng điểm của một sinh viên hoặc của cả lớp.",
@@ -76,7 +77,8 @@ MO_TA = {"Thống kê": "Kết quả học tập theo khoa và học kỳ, tổn
          "Đăng ký học phần": "Đăng ký hoặc hủy lớp học phần cho một sinh viên.",
          "Lớp học phần": "Mở lớp học phần mới ở node của khoa giảng viên.",
          "Phân tán": "Dữ liệu nằm ở node nào, một sinh viên được ghép từ đâu, và demo giao dịch phân tán.",
-         "Nhật ký": "Các thay đổi do trigger ghi lại ở từng node."}
+         "Nhật ký": "Các thay đổi do trigger ghi lại ở từng node.",
+         "Kiểm thử": "Chạy thử hàm, thủ tục và trigger, đối chiếu với kết quả mong đợi. Mọi thay đổi đều được hoàn tác."}
 
 
 def thu_tu_hk(ma):
@@ -782,9 +784,186 @@ def nhat_ky():
     bang(df)
 
 
+# ----------------------------------------------------------------- trang Kiểm thử (chỉ lg_admin)
+def tren_node(db, lenh):
+    """Gói một lô lệnh để chạy NGAY TRÊN instance node qua Linked Server. Trigger ở node tự ROLLBACK khi chặn lỗi;
+    nếu lệnh chạy trong giao dịch phân tán của điều phối thì MSDTC báo lỗi 1206 và mất mã lỗi của trigger."""
+    return f"EXEC LS_{db}.{db}.sys.sp_executesql N'" + lenh.replace("'", "''") + "'"
+
+
+def thu_chan(lenh):
+    """Khuôn cho ca 'phải bị chặn': luôn ROLLBACK (kể cả khi không bị chặn), trả về mã lỗi (0 = không bị chặn)."""
+    return (f"BEGIN TRY BEGIN TRAN; {lenh}; ROLLBACK; SELECT 0 AS MaLoi, N'Không bị chặn' AS ThongBao; END TRY "
+            "BEGIN CATCH IF @@TRANCOUNT > 0 ROLLBACK; SELECT ERROR_NUMBER() AS MaLoi, ERROR_MESSAGE() AS ThongBao; END CATCH")
+
+
+def ca_trigger(trigger, bang, lenh, db=None):
+    """Câu lệnh của một ca trigger, dạng hàm theo cờ 'mô phỏng lỗi'. Khi bật cờ, trigger bị tắt NGAY TRONG giao dịch thử
+    (DISABLE TRIGGER cũng là lệnh có giao dịch), nên ROLLBACK ở cuối ca tự bật lại trigger: không cần dọn dẹp."""
+    def sql(mo_phong):
+        l = (f"DISABLE TRIGGER dbo.{trigger} ON dbo.{bang}; " if mo_phong else "") + lenh
+        return tren_node(db, thu_chan(l)) if db else thu_chan(l)
+    return sql
+
+
+def ma_loi_la(ma):
+    return lambda kq: int(kq[-1].iloc[0]["MaLoi"]) == ma
+
+
+def cot_bang(cot, gia_tri):
+    return lambda kq: list(kq[-1][cot].astype(str)) == gia_tri
+
+
+BAI_KIEM_THU = [
+    # (nhóm, tên, mong đợi, câu lệnh, hàm kiểm tra trên danh sách DataFrame trả về)
+    ("Hàm", "fn_XepLoaiDiem: đúng các ngưỡng 8 / 4 / 3,9 / NULL", "Giỏi, Yếu, Không đạt, Chưa có điểm",
+     "SELECT d AS Diem, dbo.fn_XepLoaiDiem(d) AS XepLoai FROM (VALUES (CAST(8 AS DECIMAL(4,2)), 1), (4, 2), (3.9, 3), (NULL, 4)) v(d, i) ORDER BY i",
+     cot_bang("XepLoai", ["Giỏi", "Yếu", "Không đạt", "Chưa có điểm"])),
+    ("Hàm", "fn_DiemTBTichLuy, fn_TinChiTichLuy: khớp với tính trực tiếp từ bảng điểm (sinh viên 24010001)",
+     "Hai cột Hàm và Tính tay bằng nhau",
+     "SELECT dbo.fn_DiemTBTichLuy('24010001') AS DiemTB_Ham, "
+     "CAST(SUM(DiemTK * SoTinChi) / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS DiemTB_TinhTay, "
+     "dbo.fn_TinChiTichLuy('24010001') AS TinChi_Ham, SUM(CASE WHEN DiemTK >= 4 THEN SoTinChi ELSE 0 END) AS TinChi_TinhTay, "
+     "dbo.fn_XepLoaiHocLuc('24010001') AS XepLoai FROM dbo.vw_BangDiem WHERE MaSV = '24010001'",
+     lambda kq: kq[0].iloc[0]["DiemTB_Ham"] == kq[0].iloc[0]["DiemTB_TinhTay"]
+                and kq[0].iloc[0]["TinChi_Ham"] == kq[0].iloc[0]["TinChi_TinhTay"]),
+    ("Hàm", "fn_SiSoLopHocPhan: bằng số dòng đăng ký đếm thẳng ở node CNTT", "Hai cột bằng nhau",
+     "SELECT dbo.fn_SiSoLopHocPhan('CNTT110-HK1-2627-01') AS SiSo_Ham, "
+     "(SELECT COUNT(*) FROM QLSV_CNTT.dbo.DangKy WHERE MaLHP = 'CNTT110-HK1-2627-01') AS SiSo_DemTaiNode",
+     lambda kq: kq[0].iloc[0]["SiSo_Ham"] == kq[0].iloc[0]["SiSo_DemTaiNode"]),
+    ("Hàm", "fn_TopSinhVien: 5 người, điểm giảm dần, ai cũng có >= 8 môn", "Đúng thứ tự giảm dần",
+     "SELECT * FROM dbo.fn_TopSinhVien(NULL, 5, 8)",
+     lambda kq: len(kq[0]) == 5 and kq[0]["DiemTB"].is_monotonic_decreasing and (kq[0]["SoMon"] >= 8).all()),
+    ("Hàm", "fn_DanhSachLop: đủ mọi sinh viên của lớp 66.NN-1", "Số dòng bằng sĩ số lớp",
+     "SELECT (SELECT COUNT(*) FROM dbo.fn_DanhSachLop('66.NN-1')) AS SoDong_Ham, "
+     "(SELECT COUNT(*) FROM dbo.vw_SinhVien_ToanCuc WHERE MaLop = '66.NN-1') AS SiSoLop",
+     lambda kq: kq[0].iloc[0]["SoDong_Ham"] == kq[0].iloc[0]["SiSoLop"]),
+    ("Thủ tục", "sp_DongBoDanhMuc: sửa môn ở điều phối, chỉ node được đồng bộ nhận thay đổi",
+     "CNTT: tên mới; Ngoại ngữ: tên cũ",
+     "SET XACT_ABORT ON; BEGIN TRAN; "
+     "UPDATE dbo.MonHoc SET TenMH = TenMH + N' (thử)' WHERE MaMH = 'CNTT101'; "
+     "EXEC dbo.sp_DongBoDanhMuc @MaKhoa = 'CNTT'; "
+     "SELECT N'Node CNTT (đã đồng bộ)' AS Noi, TenMH FROM QLSV_CNTT.dbo.MonHoc WHERE MaMH = 'CNTT101' "
+     "UNION ALL SELECT N'Node Ngoại ngữ (chưa đồng bộ)', TenMH FROM QLSV_NgoaiNgu.dbo.MonHoc WHERE MaMH = 'CNTT101'; "
+     "ROLLBACK;",
+     lambda kq: kq[-1].iloc[0]["TenMH"].endswith("(thử)") and not kq[-1].iloc[1]["TenMH"].endswith("(thử)")),
+    ("Thủ tục", "sp_ThemSinhVien: lỗi ở lệnh thứ hai (trùng CCCD) hủy cả lệnh thứ nhất ở node CNTT",
+     "Lỗi 2627, node CNTT 0 dòng",
+     "SET XACT_ABORT ON; DECLARE @c CHAR(12) = (SELECT TOP (1) CCCD FROM dbo.SinhVien_HoSo ORDER BY MaSV), @loi INT = 0; "
+     "BEGIN TRY EXEC dbo.sp_ThemSinhVien @MaSV = '24019997', @HoTen = N'Thử Trùng CCCD', @NgaySinh = '2006-01-01', "
+     "@GioiTinh = N'Nam', @MaLop = '66.CNTT-1', @CCCD = @c, @Email = '24019997@sv.qlsv.edu.vn'; END TRY "
+     "BEGIN CATCH SET @loi = ERROR_NUMBER(); END CATCH; "
+     "SELECT @loi AS MaLoi, (SELECT COUNT(*) FROM QLSV_CNTT.dbo.SinhVien WHERE MaSV = '24019997') AS DongONodeCNTT;",
+     lambda kq: int(kq[-1].iloc[0]["MaLoi"]) == 2627 and int(kq[-1].iloc[0]["DongONodeCNTT"]) == 0),
+    ("Trigger", "trg_SinhVien_ChanXoa: không xóa được sinh viên đã có đăng ký", "Lỗi 50901",
+     ca_trigger("trg_SinhVien_ChanXoa", "SinhVien", "DELETE dbo.SinhVien WHERE MaSV = '24010001'", "QLSV_CNTT"), ma_loi_la(50901)),
+    ("Trigger", "trg_LopHocPhan_KiemTraMonHoc: giảng viên CNTT mở lớp môn của khoa Ngoại ngữ", "Lỗi 50902",
+     ca_trigger("trg_LopHocPhan_KiemTraMonHoc", "LopHocPhan", "INSERT dbo.LopHocPhan (MaLHP, MaMH, MaHK, Nhom, MaGV, SiSoToiDa) "
+                "VALUES ('NN101-HK1-2627-09', 'NN101', 'HK1-2627', 9, 'GVCNTT01', 50)", "QLSV_CNTT"), ma_loi_la(50902)),
+    ("Trigger", "trg_DangKy_KiemTraDangKy: sinh viên đang bảo lưu (24010008) đăng ký học phần", "Lỗi 50903",
+     ca_trigger("trg_DangKy_KiemTraDangKy", "DangKy", "INSERT dbo.DangKy (MaSV, MaLHP) VALUES ('24010008', 'CNTT110-HK1-2627-01')",
+                "QLSV_CNTT"), ma_loi_la(50903)),
+    ("Trigger", "trg_DangKy_KiemTraDangKy: đăng ký khi lớp đã vượt sĩ số (hạ sĩ số tối đa xuống 10)", "Lỗi 50904",
+     ca_trigger("trg_DangKy_KiemTraDangKy", "DangKy", "UPDATE dbo.LopHocPhan SET SiSoToiDa = 10 WHERE MaLHP = 'CNTT110-HK1-2627-01'; "
+                "INSERT dbo.DangKy (MaSV, MaLHP) VALUES ('24010016', 'CNTT110-HK1-2627-01')", "QLSV_CNTT"), ma_loi_la(50904)),
+    ("Trigger", "trg_HoSo_KiemTraSinhVien: hồ sơ cho mã sinh viên không có ở node nào", "Lỗi 50905",
+     ca_trigger("trg_HoSo_KiemTraSinhVien", "SinhVien_HoSo",
+                "INSERT dbo.SinhVien_HoSo (MaSV, CCCD, Email) VALUES ('77777777', '001306007777', 'khongcosv@sv.qlsv.edu.vn')"),
+     ma_loi_la(50905)),
+    ("Trigger", "trg_DangKy_GhiNhatKy: sửa điểm thì nhật ký ở node giữ điểm cũ, điểm mới và người sửa",
+     "UPDATE, có DiemThi cũ và mới, người sửa = lg_admin",
+     lambda mo_phong: tren_node("QLSV_CNTT", "BEGIN TRAN; "
+         + ("DISABLE TRIGGER dbo.trg_DangKy_GhiNhatKy ON dbo.DangKy; " if mo_phong else "")
+         + "UPDATE dbo.DangKy SET DiemThi = 9.5 WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01'; "
+           "SELECT TOP (1) HanhDong, NoiDungCu, NoiDungMoi, NguoiThucHien FROM dbo.NhatKy ORDER BY MaNK DESC; ROLLBACK;"),
+     lambda kq: kq[-1].iloc[0]["HanhDong"] == "UPDATE" and "DiemThi=9.50" in kq[-1].iloc[0]["NoiDungMoi"]
+                and kq[-1].iloc[0]["NguoiThucHien"] == st.session_state.user),
+]
+
+
+def chay_kiem_thu(sql, kiem):
+    """Trả về (đúng hay sai, các DataFrame kết quả, thông báo lỗi nếu lệnh lỗi)."""
+    try:
+        kq = chay(sql)
+        return bool(kq) and bool(kiem(kq)), kq, None
+    except pyodbc.Error as e:
+        return False, [], loi(e)
+    except (KeyError, IndexError, ValueError, TypeError) as e:
+        return False, [], f"Kết quả không đúng dạng mong đợi: {e}"
+
+
+def kiem_thu():
+    st.caption("Mỗi ca chạy trong một giao dịch rồi ROLLBACK (hoặc chỉ đọc), nên dữ liệu mẫu không đổi. Ca trigger chặn lỗi "
+               "chạy ngay trên node: trên giao diện bình thường các trigger này không bao giờ chạy tới vì thủ tục đã chặn trước.")
+    a, b = st.columns([1, 1])
+    nhom = a.segmented_control("Nhóm", ["Tất cả", "Hàm", "Thủ tục", "Trigger"], default="Tất cả", key="kt_nhom") or "Tất cả"
+    mo_phong = b.toggle("Mô phỏng lỗi: tắt trigger trước khi thử", key="kt_mo_phong",
+                        help="Mỗi ca trigger tắt chính trigger đó trong giao dịch thử rồi mới chạy, nên trigger không chặn được và ca "
+                             "phải hiện SAI. ROLLBACK cuối ca bật lại trigger; dữ liệu và trigger thật không đổi.")
+    if mo_phong:
+        st.warning("Đang mô phỏng lỗi: các ca **Trigger** sẽ chạy khi trigger đã bị tắt, nên phải ra ❌. Đó là bằng chứng phép kiểm "
+                   "tra thật sự phát hiện được lỗi. Tắt công tắc rồi chạy lại để thấy tất cả ✅.", icon=":material/science:")
+    ds = [b for b in BAI_KIEM_THU if nhom == "Tất cả" or b[0] == nhom]
+    kq_all = st.session_state.setdefault("kt_kq", {})        # tên ca -> (đúng?, kết quả, lỗi, câu SQL, có mô phỏng?)
+
+    def chay_ca(b):
+        sql = b[3](mo_phong) if callable(b[3]) else b[3]
+        kq_all[b[1]] = chay_kiem_thu(sql, b[4]) + (sql, mo_phong and callable(b[3]))
+
+    c1, c2, _ = st.columns([1.3, 1, 2])
+    if c1.button(f"Chạy cả {len(ds)} ca", type="primary", icon=":material/play_arrow:", width="stretch"):
+        with st.spinner("Đang chạy trên 4 instance..."):
+            for b in ds:
+                chay_ca(b)
+        st.session_state["kt_vua_chay"] = None
+    if c2.button("Xóa kết quả", icon=":material/restart_alt:", width="stretch", disabled=not kq_all):
+        kq_all.clear()
+
+    da_chay = [b for b in ds if b[1] in kq_all]
+    if da_chay:
+        dung = sum(kq_all[b[1]][0] for b in da_chay)
+        (st.success if dung == len(da_chay) else st.error)(
+            f"{dung}/{len(da_chay)} ca đã chạy ĐÚNG" + (f" · còn {len(ds) - len(da_chay)} ca chưa chạy" if len(da_chay) < len(ds) else ""),
+            icon=":material/check_circle:" if dung == len(da_chay) else ":material/error:")
+
+    # Mỗi ca một hàng: trạng thái, tên, nút chạy riêng; bấm xem chi tiết để thấy mong đợi, kết quả thật và câu SQL
+    for i, b in enumerate(BAI_KIEM_THU):
+        if b not in ds:
+            continue
+        n, ten, mong_doi = b[0], b[1], b[2]
+        kq = kq_all.get(ten)
+        with st.container(border=True):
+            h1, h2 = st.columns([6, 1], vertical_alignment="center")
+            trang_thai = "⚪ chưa chạy" if kq is None else ("✅ ĐÚNG" if kq[0] else "❌ SAI")
+            h1.markdown(f"**{trang_thai}** · `{n}` · {ten}" + ("  \n:orange[đã tắt trigger (mô phỏng lỗi)]" if kq and kq[4] else ""))
+            if h2.button("Chạy", key=f"kt_chay_{i}", icon=":material/play_arrow:", width="stretch"):
+                with st.spinner("Đang chạy..."):
+                    chay_ca(b)
+                st.session_state["kt_vua_chay"] = ten
+                st.rerun()                                       # vẽ lại hàng này với trạng thái mới
+            st.caption(f"Mong đợi: {mong_doi}")
+            if kq is not None:
+                ok, bang_kq, thong_bao, sql, _ = kq
+                if bang_kq and {"MaLoi", "ThongBao"} <= set(bang_kq[-1]):   # ca "phải bị chặn": ghi rõ mã lỗi thực tế, đủ thông báo
+                    r = bang_kq[-1].iloc[0]
+                    st.markdown(f"**Thực tế:** {'không bị chặn' if int(r['MaLoi']) == 0 else f'lỗi {int(r.MaLoi)}'}"
+                                + ("" if int(r["MaLoi"]) == 0 else f" — {r['ThongBao']}"))
+                    if int(r["MaLoi"]) == 547:
+                        st.info("547 là lỗi **khóa ngoại** của SQL Server: trigger đã bị tắt nên khóa ngoại là lớp chặn còn lại. "
+                                "Dữ liệu vẫn an toàn, nhưng ca vẫn SAI vì thứ cần kiểm tra là trigger (mã 50901) chứ không phải khóa ngoại.",
+                                icon=":material/info:")
+                with st.expander("Xem chi tiết", expanded=not ok or st.session_state.get("kt_vua_chay") == ten):
+                    if thong_bao:
+                        st.error(thong_bao)
+                    for df in bang_kq:
+                        bang(df)
+                    st.code(sql, language="sql", wrap_lines=True)
+
+
 TRANG = {"Thống kê": thong_ke, "Tìm kiếm": trang_tim_kiem,
          "Bảng điểm": bang_diem, "Nhập điểm": nhap_diem, "Sinh viên": sinh_vien,
-         "Đăng ký học phần": dang_ky, "Lớp học phần": lop_hoc_phan, "Phân tán": phan_tan, "Nhật ký": nhat_ky}
+         "Đăng ký học phần": dang_ky, "Lớp học phần": lop_hoc_phan, "Phân tán": phan_tan, "Nhật ký": nhat_ky,
+         "Kiểm thử": kiem_thu}
 
 
 # ----------------------------------------------------------------- khung chính
