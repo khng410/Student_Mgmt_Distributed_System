@@ -21,7 +21,8 @@ Mục lục:
 [15. Lưu ý quan trọng](#15-lưu-ý-quan-trọng) ·
 [16. Giới hạn đã biết](#16-giới-hạn-đã-biết) ·
 [17. Câu hỏi thường gặp](#17-câu-hỏi-thường-gặp-khi-bảo-vệ) ·
-[18. Thuật ngữ](#18-thuật-ngữ)
+[18. Thuật ngữ](#18-thuật-ngữ) ·
+[19. Demo 7 nội dung bắt buộc](#19-demo-7-nội-dung-bắt-buộc-dùng-file-nào-câu-nào-thao-tác-ra-sao)
 
 ---
 
@@ -458,3 +459,207 @@ Không. View chỉ cho thấy khoa mình, và ở node Ngoại ngữ tài khoả
 | Nhất quán sau cùng | Các bản sao có thể lệch tạm thời nhưng rồi sẽ khớp |
 | DDL / DML | Lệnh định nghĩa cấu trúc (`CREATE`, `ALTER`) / lệnh thao tác dữ liệu (`INSERT`, `UPDATE`, `SELECT`) |
 | Blocking / Deadlock | Chờ khóa / chờ khóa vòng tròn |
+
+## 19. Demo 7 nội dung bắt buộc: dùng file nào, câu nào, thao tác ra sao
+
+**Chuẩn bị chung (làm một lần trước buổi demo)**
+
+1. `docker compose ps`: cả 4 container phải `healthy`.
+2. `python3 -I scripts/trien_khai.py` rồi `python3 -I scripts/kiem_tra_demo.py` (phải ra "Tất cả đều đúng").
+3. Mở SQLPro (hoặc SSMS), kết nối `localhost,14330`, tài khoản `sa`. Mọi câu dưới đây chạy trên kết nối này.
+4. Cách chạy một câu: **bôi đen đúng đoạn lệnh rồi bấm chạy**. Không bấm chạy cả file trừ khi ghi rõ.
+
+| # | Yêu cầu | File | Phần cần chạy |
+| --- | --- | --- | --- |
+| 1 | Truy vấn giữa nhiều node | `06_queries_40.sql` | Câu 12 và câu 6 |
+| 2 | Phân mảnh ngang, dọc, tái thiết | `04_fragmentation.sql` | Phần 2 và phần 3 |
+| 3 | View toàn cục tương đương dữ liệu gốc | `05_views.sql` | Khối KIỂM TRA cuối file |
+| 4 | COMMIT và ROLLBACK | `11_transactions_concurrency.sql` | Phần A (A1, A2) |
+| 5 | Blocking, deadlock | `11_transactions_concurrency.sql` | Phần B, C (2 cửa sổ) và phần D |
+| 6 | Execution Plan và index | `11_transactions_concurrency.sql` | Phần E1 |
+| 7 | Linked Server, tên 4 phần | `12_linked_server.sql` | Phần 1, 2, câu 1, câu 4, phần 5 |
+
+### 19.1. Truy vấn giữa nhiều database/node
+
+**File:** `06_queries_40.sql` (các câu có nhãn `[PT]` là câu phân tán).
+
+**Thao tác:** bôi đen và chạy **câu 12**:
+
+```sql
+SELECT COUNT(*) AS SoLopHocPhan
+FROM (
+    SELECT MaLHP FROM QLSV_CNTT.dbo.LopHocPhan     WHERE MaHK = 'HK1-2627'
+    UNION ALL
+    SELECT MaLHP FROM QLSV_NgoaiNgu.dbo.LopHocPhan WHERE MaHK = 'HK1-2627'
+    UNION ALL
+    SELECT MaLHP FROM QLSV_DuLich.dbo.LopHocPhan   WHERE MaHK = 'HK1-2627'
+) x;
+```
+
+**Giải thích dữ liệu đến từ đâu:** mỗi nhánh `SELECT` đọc bảng `LopHocPhan` ở một instance khác nhau (cổng 14331, 14332, 14333).
+`QLSV_CNTT.dbo.LopHocPhan` là synonym trỏ qua Linked Server `LS_QLSV_CNTT`; điều phối gửi câu lọc sang từng node rồi cộng kết quả.
+
+**Chứng minh thêm:** chạy **câu 6** (số sinh viên qua view toàn cục so với bản tập trung: 72 = 72).
+Muốn thấy rõ "nhiều máy", chạy phần 2 của `12_linked_server.sql`: mỗi dòng in tên máy chủ do chính node đó tự báo.
+
+### 19.2. Phân mảnh ngang, phân mảnh dọc và tái thiết
+
+**File:** `04_fragmentation.sql`.
+
+**Thao tác:**
+
+1. Chỉ vào phần chú thích đầu file để nói tiêu chí: ngang chính theo `MaKhoa`, ngang dẫn xuất theo bảng cha, dọc tách `SinhVien` thành học vụ và hồ sơ.
+2. Chạy **phần 3** (bảng "dữ liệu nằm ở node nào"). Kết quả: mỗi bảng chia đều cho 3 node và tổng bằng bản tập trung, ví dụ `DangKy | 621 | 207 | 207 | 207`. Đây là **phân mảnh ngang**.
+3. Chạy câu cuối file (ghép một sinh viên từ 2 mảnh). Đây là **phân mảnh dọc** và cách **tái thiết** bằng `JOIN` theo `MaSV`:
+
+   ```sql
+   SELECT TOP (3) s.MaSV, s.HoTen, s.MaLop, h.CCCD, h.Email
+   FROM QLSV_CNTT.dbo.SinhVien s                       -- mảnh học vụ, ở node CNTT
+   JOIN QLSV_TongHop.dbo.SinhVien_HoSo h ON h.MaSV = s.MaSV   -- mảnh hồ sơ, ở điều phối
+   ORDER BY s.MaSV;
+   ```
+
+4. Chạy **phần 2** (từ `DROP TABLE IF EXISTS #kq` đến hết phần 2, chạy nguyên khối vì có biến). Kết quả: mọi dòng có `Thieu = 0`, `Thua = 0`, `LechSoDong = 0`, `KetQua = OK`.
+
+**Cần nói:** bảng ngang tái thiết bằng `UNION ALL` 3 node; `SinhVien` tái thiết bằng (`UNION ALL` 3 node) `JOIN SinhVien_HoSo`. Ba cột bằng 0 chứng minh đầy đủ, không thừa, không trùng.
+
+**Minh họa vị từ phân mảnh (tùy chọn):** thêm một lớp sai khoa vào node CNTT sẽ bị ràng buộc `CHECK` từ chối:
+
+```sql
+INSERT QLSV_CNTT.dbo.Lop (MaLop, TenLop, NienKhoa, MaKhoa) VALUES ('99.NN-9', N'Lớp sai node', '2025-2029', 'NN');
+-- lỗi 547: vi phạm CK_Lop_MaKhoa_CNTT
+```
+
+### 19.3. View toàn cục tương đương dữ liệu logic
+
+**File:** `05_views.sql`.
+
+**Thao tác:**
+
+1. Chỉ vào định nghĩa `vw_SinhVien_ToanCuc`: `UNION ALL` 3 node, người dùng chỉ cần gọi một tên.
+2. Chạy `SELECT TOP (10) * FROM dbo.vw_SinhVien_ToanCuc ORDER BY MaSV;` để thấy view dùng như một bảng.
+3. Chạy **khối KIỂM TRA** cuối file (câu `SELECT N'vw_SinhVien_ToanCuc' AS KiemTra ...` gồm 3 nhánh `UNION ALL`).
+
+**Kết quả mong đợi:** 3 dòng, mỗi dòng `Thieu = 0` và `Thua = 0`:
+
+| KiemTra | Thieu | Thua |
+| --- | --- | --- |
+| `vw_SinhVien_ToanCuc` | 0 | 0 |
+| `vw_SinhVien_DayDu (tái thiết dọc)` | 0 | 0 |
+| `vw_DangKy_ToanCuc` | 0 | 0 |
+
+**Cần nói:** `Thieu` là số dòng có ở `QLSV_TapTrung` mà view không có; `Thua` là ngược lại, tính bằng `EXCEPT` hai chiều.
+Cả hai bằng 0 nghĩa là view trả đúng tập dữ liệu của bản tập trung, không sai một dòng hay một giá trị nào.
+
+### 19.4. Một transaction COMMIT và một transaction ROLLBACK
+
+**File:** `11_transactions_concurrency.sql`, **phần A**.
+
+**Thao tác:** bôi đen từ đầu phần A đến hết A2 rồi chạy (hoặc chạy A1, A2 lần lượt).
+
+- **A1 (COMMIT):** thêm sinh viên `99999998` vào node CNTT và hồ sơ vào điều phối trong một giao dịch.
+  Kết quả: `Sau COMMIT | 1 | 1` (cả hai nơi đều có dòng). File tự xóa dòng thử ngay sau đó.
+- **A2 (ROLLBACK):** lệnh thứ nhất ghi vào node CNTT thành công, lệnh thứ hai cố ý trùng CCCD.
+  Kết quả: một dòng lỗi **2627** (vi phạm `UNIQUE`), rồi `Sau ROLLBACK | 0 | 0`.
+
+**Cần nói:** hai lệnh nằm trên hai instance nên đây là giao dịch phân tán do MSDTC điều khiển. Ở A2, lệnh ghi vào node CNTT **đã chạy xong** nhưng vẫn bị hủy vì lệnh ở điều phối lỗi: tính nguyên tố được giữ trên nhiều máy.
+
+**Cách khác, trực quan hơn:** trang **Phân tán** của ứng dụng có hai nút COMMIT và ROLLBACK (gọi `sp_DemoGiaoDich`), hoặc chạy:
+
+```sql
+EXEC dbo.sp_DemoGiaoDich @GayLoi = 0;   -- COMMIT: 1 dòng ở node CNTT, 1 dòng ở điều phối
+EXEC dbo.sp_DemoGiaoDich @GayLoi = 1;   -- ROLLBACK: 0 và 0, kèm thông báo lỗi
+```
+
+### 19.5. Blocking và deadlock với hai cửa sổ
+
+**File:** `11_transactions_concurrency.sql`, **phần B** (blocking), **phần C** (deadlock), **phần D** (giám sát).
+Phần B và C nằm trong chú thích `/* ... */`: phải **sao chép từng khối** ra cửa sổ, không chạy cả file.
+
+**Blocking (phần B)**
+
+1. Mở **hai cửa sổ truy vấn** cùng kết nối `localhost,14330`.
+2. **Cửa sổ 1:** dán và chạy khối BƯỚC 1 (`BEGIN TRAN` + `UPDATE` điểm của `24010001`, **không** commit).
+3. **Cửa sổ 2:** dán và chạy khối BƯỚC 2 (sửa cùng dòng). Cửa sổ này **đứng chờ**.
+4. **Cửa sổ 1** (hoặc mở cửa sổ thứ 3): bôi đen và chạy nguyên **phần D**.
+   - Bảng **D1** có một dòng, cột `Node` là tên máy chủ của node CNTT: `SessionBiChan` là phiên của cửa sổ 2, `SessionGayChan` là phiên của cửa sổ 1, `wait_type = LCK_M_U`. **Đây là chỗ chỉ rõ session bị block.**
+   - Bảng **D2** cho thấy phiên gây chặn giữ khóa `X` trạng thái `GRANT`, phiên bị chặn có khóa trạng thái `WAIT`.
+5. **Cửa sổ 1:** chạy `ROLLBACK TRAN;`. Cửa sổ 2 chạy xong ngay. **Cửa sổ 2:** chạy `ROLLBACK TRAN;`.
+
+Lưu ý: số phiên trong D1 là số phiên **ở instance node** (điều phối mở kết nối riêng sang node), không trùng với số phiên hiển thị ở cửa sổ SQLPro.
+Quên bước 5 thì mọi truy vấn khác vào `DangKy` sẽ treo.
+
+**Deadlock (phần C)**
+
+1. **Cửa sổ 1:** chạy khối "CỬA SỔ 1" (sửa node CNTT, chờ 15 giây, sửa node Ngoại ngữ).
+2. Trong 15 giây đó, **cửa sổ 2:** chạy khối "CỬA SỔ 2" (thứ tự ngược lại).
+3. Kết quả: sau khoảng 30 giây cửa sổ 2 báo **lỗi 1222** (`Lock request time out period exceeded`), cửa sổ 1 chạy xong.
+
+**Cần nói:** hai phiên chờ nhau vòng tròn trên hai instance. Mỗi instance chỉ thấy khóa của mình nên **không có lỗi 1205** như deadlock trong một máy; hệ thống thoát nhờ `SET LOCK_TIMEOUT`. Cách tránh: mọi giao dịch sửa các node theo cùng một thứ tự.
+
+Nếu không demo trực tiếp được, chụp sẵn ảnh bảng D1 lúc đang bị chặn và thông báo lỗi 1222 để trình bày.
+
+### 19.6. Actual Execution Plan và tác dụng của index
+
+**File:** `11_transactions_concurrency.sql`, **phần E1**.
+
+**Thao tác:**
+
+1. **SSMS:** bấm `Ctrl+M` (Include Actual Execution Plan). **SQLPro:** không cần làm gì, file đã bật `STATISTICS PROFILE` nên kế hoạch hiện thành bảng chữ.
+2. Bôi đen **nguyên khối E1** (từ `DROP TABLE IF EXISTS #PerfDangKy;` đến `DROP TABLE #PerfDangKy;`) và chạy. Phải chạy nguyên khối vì dùng bảng tạm.
+3. Đọc kết quả theo thứ tự:
+
+| Bước | Truy vấn | Toán tử trong kế hoạch | `logical reads` (tab Messages) |
+| --- | --- | --- | --- |
+| Trước index | A: lọc theo `MaLHP` | **Clustered Index Scan** | khoảng 1.750 |
+| Trước index | B: lọc theo `MaSV` | Clustered Index Seek | khoảng 3 |
+| Sau index | A: lọc theo `MaLHP` | **Index Seek** trên `IX_PerfDangKy_MaLHP` | khoảng 3 |
+
+Con số chính xác thay đổi theo máy; ghi lại số bạn đo được.
+
+**Giải thích ngắn:**
+
+- Khóa chính `(MaSV, MaLHP)` sắp theo `MaSV` trước, nên tìm theo `MaLHP` phải quét cả 300.000 dòng.
+- Index trên `MaLHP` cho phép đi thẳng tới các dòng cần: số trang đọc giảm vài trăm lần.
+- `INCLUDE (DiemTK)` làm index chứa đủ cột truy vấn cần, không phải quay lại bảng gốc.
+- Truy vấn B đã nhanh sẵn vì `MaSV` đứng đầu khóa chính: index chỉ có ích khi khớp cách truy vấn.
+- Cái giá: mỗi index làm lệnh ghi chậm hơn một chút.
+
+Bảng thử 300.000 dòng là bảng tạm vì dữ liệu mẫu (621 đăng ký) quá nhỏ để thấy khác biệt. Index thật cho 3 node được tạo ở **E2**.
+
+### 19.7. Linked Server và tên 4 phần
+
+**File:** `12_linked_server.sql`. File này không sửa dữ liệu nên có thể chạy cả file, nhưng nên chạy từng phần để giải thích.
+
+| Bước | Chạy | Chứng minh |
+| --- | --- | --- |
+| 1 | **Phần 1** | Có 3 Linked Server, cột `MayChuDich` là 3 container khác nhau, `RpcOut = 1`, `GiaoDichPhanTan = 1` |
+| 2 | **Phần 2** | 4 dòng, cột `MayChu` là 4 tên máy chủ khác nhau do chính từng instance tự báo |
+| 3 | **Câu 1** | Truy vấn **tên 4 phần** tới một node |
+| 4 | **Câu 4** | `JOIN` giữa hai instance: học vụ ở node CNTT với hồ sơ ở điều phối |
+| 5 | **Câu 2** | Số sinh viên qua tên 4 phần bằng số qua view toàn cục (72 = 72) |
+| 6 | **Câu 5** | `OPENQUERY`: cả câu lệnh chạy bên node, chỉ trả kết quả |
+| 7 | **Phần 5** | Giao dịch phân tán: sửa 2 node, `ROLLBACK`, cả 2 node về điểm cũ |
+| 8 | **Phần 6** | `lg_bgh` bị node từ chối ghi (lỗi 229): quyền do node quyết định |
+
+Câu tên 4 phần (câu 1):
+
+```sql
+SELECT TOP (5) MaSV, HoTen, MaLop
+FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien      -- LinkedServer.Database.Schema.Bảng
+ORDER BY MaSV;
+```
+
+**Kịch bản và bằng chứng thử nghiệm**
+
+| Kịch bản | Thao tác | Bằng chứng |
+| --- | --- | --- |
+| Đọc liên node | Phần 2, câu 1, câu 4 của `12` | 4 tên máy chủ khác nhau; kết quả `JOIN` từ 2 instance |
+| Tổng hợp toàn hệ thống | Câu 7 và câu 8 của `12` | Số lượt có điểm theo khoa ở câu 7 (tên 4 phần) khớp câu 8 (view) |
+| Ghi nhiều node | Phần 5 của `12` | "Trong giao dịch": 9.00 và 9.00; "Sau ROLLBACK": điểm cũ |
+| Phân quyền qua node | Phần 6 của `12` | Lỗi 229 do node CNTT trả về |
+| Đồng bộ | Phần 5 của `14_dong_bo_danh_muc.sql` (7 kịch bản) | Bảng TRƯỚC và SAU ở cả 4 nơi; phần 7: lệch 0, hàng đợi 0 |
+| Một node mất kết nối | `python3 -I scripts/thu_mat_ket_noi.py` | Bảng kết quả từng thao tác khi node tắt và sau khi bật lại |
+| Tự kiểm tra toàn bộ | `python3 -I scripts/kiem_tra_demo.py` | Từng dòng ĐÚNG hoặc SAI, cuối cùng "Tất cả đều đúng" |
+
+Với SSMS, bật `Ctrl+M` khi chạy câu 1 hoặc câu 4 để thấy toán tử **Remote Query** trong kế hoạch thực thi: bằng chứng câu lệnh được gửi sang instance khác.
