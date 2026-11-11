@@ -58,6 +58,7 @@ docker-compose.yml   4 instance SQL Server
 app/        ứng dụng Streamlit (app.py, config.py, requirements.txt, chay.sh)
 report/     báo cáo Word
 images/     sơ đồ và ảnh demo
+README_KienThuc.md   kiến thức cần nắm về hệ thống và các lưu ý (đọc trước khi bảo vệ)
 docs/       HuongDan.md: hướng dẫn chi tiết (đăng nhập, quyền hạn, kiểm thử Linked Server, hiệu năng, chụp ảnh demo)
 ```
 
@@ -162,7 +163,7 @@ Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa 
 | Sửa danh mục qua `dm_LuuMonHoc`, `dm_LuuHocKy` hoặc trang Danh mục | Bản chính và các node còn sống đổi ngay; mục của node vắng **ở lại hàng đợi** kèm số lần thử và lỗi |
 | Sửa thẳng danh mục ở điều phối bằng `UPDATE` | Được; trigger xếp 3 mục vào hàng đợi, bản sao ở node chưa đổi cho tới lần xử lý hàng đợi |
 
-Phục hồi: `docker start <node>` → chạy `EXEC dbo.dm_XuLyHangDoi` (hoặc bấm **Xử lý hàng đợi** ở trang Phân tán, mục Đồng bộ danh mục): node vừa trở lại nhận đủ thay đổi còn chờ, hàng đợi rỗng → chạy lại phần 2 của `04` hoặc phần 7 của `15` để kiểm tra.
+Phục hồi: `docker start <node>` → chạy `EXEC dbo.dm_XuLyHangDoi` (hoặc bấm **Xử lý hàng đợi** ở trang Phân tán, mục Đồng bộ danh mục): node vừa trở lại nhận đủ thay đổi còn chờ, hàng đợi rỗng → chạy lại phần 2 của `04` hoặc phần 7 của `14` để kiểm tra.
 Dữ liệu phân mảnh (sinh viên, đăng ký, điểm) không cần đồng bộ lại vì mỗi dòng chỉ có một bản và giao dịch bị hủy không để lại gì.
 Hàng đợi chỉ dành cho danh mục nhân bản. Thao tác ghi dữ liệu phân mảnh (sinh viên, đăng ký, điểm) vào node vắng vẫn phải làm lại sau khi node trở lại.
 

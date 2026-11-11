@@ -1,6 +1,6 @@
 ﻿/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
-   File   : 14_dong_bo_danh_muc.sql   (gộp cả kiểm thử đồng bộ, trước đây ở file kiểm thử riêng)
+   File   : 14_dong_bo_danh_muc.sql
    Mục đích: ĐỒNG BỘ VÀ KIỂM THỬ ĐỒNG BỘ
              (1) tự đồng bộ danh mục nhân bản (Khoa, HocKy, MonHoc) từ điều phối xuống 3 node, có HÀNG ĐỢI
                  ghi bù cho node đang mất kết nối;
@@ -218,8 +218,11 @@ BEGIN
     IF NULLIF(LTRIM(@MaGV), '') IS NULL OR NULLIF(LTRIM(@HoTen), N'') IS NULL
         THROW 50104, N'Phải nhập mã và họ tên giảng viên.', 1;
 
-    -- mã là duy nhất trên CẢ 3 node; thêm mới thì mã phải chưa có   (ponytail: cần cả 3 node bật, nới ra nếu cần ghi khi node khác tắt)
-    DECLARE @o VARCHAR(10) = (SELECT k FROM (SELECT MaGV AS ma, 'CNTT' AS k FROM QLSV_CNTT.dbo.GiangVien UNION ALL SELECT MaGV, 'NN' FROM QLSV_NgoaiNgu.dbo.GiangVien UNION ALL SELECT MaGV, 'DL' FROM QLSV_DuLich.dbo.GiangVien) x WHERE ma = @MaGV);
+    -- Mã là duy nhất trên CẢ 3 node: @o = khoa đang giữ mã này (NULL = chưa có).
+    -- ponytail: cần cả 3 node bật; hỏi lần lượt từng node như TimKhoaCuaLop nếu muốn lưu được khi node khác tắt
+    DECLARE @o VARCHAR(10) = (SELECT k FROM (SELECT MaGV, 'CNTT' AS k FROM QLSV_CNTT.dbo.GiangVien
+                                             UNION ALL SELECT MaGV, 'NN' FROM QLSV_NgoaiNgu.dbo.GiangVien
+                                             UNION ALL SELECT MaGV, 'DL' FROM QLSV_DuLich.dbo.GiangVien) x WHERE MaGV = @MaGV);
     IF @o IS NOT NULL AND (@ThemMoi = 1 OR @o <> @MaKhoa)
         THROW 50107, N'Mã giảng viên đã tồn tại. Muốn sửa thì chọn dòng đó trong danh sách.', 1;
 
@@ -256,8 +259,10 @@ BEGIN
     IF NULLIF(LTRIM(@MaLop), '') IS NULL OR NULLIF(LTRIM(@TenLop), N'') IS NULL
         THROW 50106, N'Phải nhập mã lớp và tên lớp.', 1;
 
-    -- mã là duy nhất trên CẢ 3 node; thêm mới thì mã phải chưa có   (ponytail: cần cả 3 node bật, nới ra nếu cần ghi khi node khác tắt)
-    DECLARE @o VARCHAR(10) = (SELECT k FROM (SELECT MaLop AS ma, 'CNTT' AS k FROM QLSV_CNTT.dbo.Lop UNION ALL SELECT MaLop, 'NN' FROM QLSV_NgoaiNgu.dbo.Lop UNION ALL SELECT MaLop, 'DL' FROM QLSV_DuLich.dbo.Lop) x WHERE ma = @MaLop);
+    -- Mã là duy nhất trên cả 3 node (như dm_LuuGiangVien)
+    DECLARE @o VARCHAR(10) = (SELECT k FROM (SELECT MaLop, 'CNTT' AS k FROM QLSV_CNTT.dbo.Lop
+                                             UNION ALL SELECT MaLop, 'NN' FROM QLSV_NgoaiNgu.dbo.Lop
+                                             UNION ALL SELECT MaLop, 'DL' FROM QLSV_DuLich.dbo.Lop) x WHERE MaLop = @MaLop);
     IF @o IS NOT NULL AND (@ThemMoi = 1 OR @o <> @MaKhoa)
         THROW 50107, N'Mã lớp đã tồn tại. Muốn sửa thì chọn dòng đó trong danh sách.', 1;
 
@@ -422,7 +427,7 @@ GO
    7a. Sửa dữ liệu phân mảnh ở node (điểm thi): chỉ node đó đổi, node khác không đổi.
    ===================================================================== */
 BEGIN TRAN;
-    DECLARE @truoc TABLE (Noi NVARCHAR(30), DiemTong DECIMAL(12,2));
+    DECLARE @truoc TABLE (Noi NVARCHAR(30), Tong DECIMAL(12,2));
     INSERT @truoc
     SELECT N'CNTT', SUM(DiemThi) FROM QLSV_CNTT.dbo.DangKy
     UNION ALL SELECT N'Ngoại ngữ', SUM(DiemThi) FROM QLSV_NgoaiNgu.dbo.DangKy
@@ -430,15 +435,12 @@ BEGIN TRAN;
 
     UPDATE QLSV_CNTT.dbo.DangKy SET DiemThi = DiemThi + 0.5 WHERE MaSV = '24010001' AND MaLHP = 'CNTT101-HK1-2425-01';   -- sửa điểm tại node CNTT
 
-    DECLARE @sau TABLE (Noi NVARCHAR(30), DiemTong DECIMAL(12,2));
-    INSERT @sau
-    SELECT N'CNTT', SUM(DiemThi) FROM QLSV_CNTT.dbo.DangKy
-    UNION ALL SELECT N'Ngoại ngữ', SUM(DiemThi) FROM QLSV_NgoaiNgu.dbo.DangKy
-    UNION ALL SELECT N'Du lịch',   SUM(DiemThi) FROM QLSV_DuLich.dbo.DangKy;
-
-    SELECT t.Noi, t.DiemTong AS TongDiemThi_Truoc, s.DiemTong AS TongDiemThi_Sau,
-           CASE WHEN t.DiemTong = s.DiemTong THEN N'không đổi' ELSE N'ĐÃ ĐỔI (+0.5)' END AS KetQua
-    FROM @truoc t JOIN @sau s ON s.Noi = t.Noi;
+    SELECT t.Noi, t.Tong AS TongDiemThi_Truoc, s.Tong AS TongDiemThi_Sau,
+           CASE WHEN t.Tong = s.Tong THEN N'không đổi' ELSE N'ĐÃ ĐỔI (+0.5)' END AS KetQua
+    FROM @truoc t
+    JOIN (SELECT N'CNTT' AS Noi, SUM(DiemThi) AS Tong FROM QLSV_CNTT.dbo.DangKy
+          UNION ALL SELECT N'Ngoại ngữ', SUM(DiemThi) FROM QLSV_NgoaiNgu.dbo.DangKy
+          UNION ALL SELECT N'Du lịch',   SUM(DiemThi) FROM QLSV_DuLich.dbo.DangKy) s ON s.Noi = t.Noi;
 ROLLBACK TRAN;
 GO
 

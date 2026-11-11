@@ -17,7 +17,7 @@
        (-> phép chia quan hệ).
      - Mỗi khoa: 1 giảng viên chưa dạy lớp nào; môn CHUNG04 chưa có lớp học phần.
      - HK1-2627 (đang học): mới có DiemQT, DiemThi = NULL nên DiemTK = NULL.
-     - Có sinh viên điểm thấp (DiemTK < 4) và sinh viên điểm cao (cực trị, top-N).
+     - Có sinh viên điểm thấp (DiemTK < 5) và sinh viên điểm cao (cực trị, top-N).
      - Môn CHUNG01-04 là môn chung (MaKhoa NULL); mỗi khoa mở nhóm riêng
        (CNTT = nhóm 1, NN = nhóm 2, DL = nhóm 3).
      - Sinh viên chỉ đăng ký lớp học phần của giảng viên cùng khoa, nên khi
@@ -931,7 +931,7 @@ ORDER BY k.MaKhoa;
 SELECT (SELECT COUNT(*) FROM dbo.LopHocPhan WHERE MaMH = 'CHUNG04') AS LopCHUNG04,
        (SELECT COUNT(*) FROM dbo.DangKy d JOIN dbo.LopHocPhan lp ON lp.MaLHP = d.MaLHP
          WHERE lp.MaHK = 'HK1-2627' AND d.DiemThi IS NOT NULL) AS DiemThiHK1_2627,
-       (SELECT COUNT(*) FROM dbo.DangKy WHERE DiemTK < 4) AS SoLuotDiemDuoi4;
+       (SELECT COUNT(*) FROM dbo.DangKy WHERE DiemTK < 5) AS SoLuotKhongDat;
 GO
 
 -- Phải trả về 0 dòng: sinh viên đăng ký lớp học phần của khoa khác

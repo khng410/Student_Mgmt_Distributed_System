@@ -269,13 +269,9 @@ CLOSE c;
 DEALLOCATE c;
 GO
 
--- Kiểm tra: mỗi node có index mới trên DangKy(MaLHP)
-SELECT N'QLSV_CNTT' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_CNTT.QLSV_CNTT.sys.indexes i
-WHERE i.object_id = (SELECT object_id FROM LS_QLSV_CNTT.QLSV_CNTT.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP'
-UNION ALL
-SELECT N'QLSV_NgoaiNgu' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.indexes i
-WHERE i.object_id = (SELECT object_id FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP'
-UNION ALL
-SELECT N'QLSV_DuLich' AS DB, i.name AS TenIndex, i.type_desc FROM LS_QLSV_DuLich.QLSV_DuLich.sys.indexes i
-WHERE i.object_id = (SELECT object_id FROM LS_QLSV_DuLich.QLSV_DuLich.sys.tables WHERE name = N'DangKy') AND i.name = N'IX_DangKy_MaLHP';
+-- Kiểm tra: mỗi node có index mới trên DangKy(MaLHP) (câu hỏi chạy ngay tại node)
+DECLARE @q NVARCHAR(MAX) = N'SELECT DB_NAME() AS DB, name AS TenIndex, type_desc FROM sys.indexes WHERE name = N''IX_DangKy_MaLHP''';
+EXEC LS_QLSV_CNTT.QLSV_CNTT.sys.sp_executesql @q;
+EXEC LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.sp_executesql @q;
+EXEC LS_QLSV_DuLich.QLSV_DuLich.sys.sp_executesql @q;
 GO

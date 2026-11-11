@@ -318,16 +318,6 @@ GO
    (bảng của 3 node khoa: kiểm tra ở cuối 02_create_nodes.sql)
    ===================================================================== */
 
-USE master;
-GO
-SELECT N'QLSV_TapTrung' AS Node, t.name AS TenBang,
-       (SELECT COUNT(*) FROM QLSV_TapTrung.sys.check_constraints c WHERE c.parent_object_id = t.object_id) AS SoCHECK,
-       (SELECT COUNT(*) FROM QLSV_TapTrung.sys.foreign_keys f WHERE f.parent_object_id = t.object_id)      AS SoFK
-FROM QLSV_TapTrung.sys.tables t
-UNION ALL
-SELECT N'QLSV_TongHop', t.name,
-       (SELECT COUNT(*) FROM QLSV_TongHop.sys.check_constraints c WHERE c.parent_object_id = t.object_id),
-       (SELECT COUNT(*) FROM QLSV_TongHop.sys.foreign_keys f WHERE f.parent_object_id = t.object_id)
-FROM QLSV_TongHop.sys.tables t
-ORDER BY Node, TenBang;
+SELECT N'QLSV_TapTrung' AS DB, COUNT(*) AS SoBang FROM QLSV_TapTrung.sys.tables      -- 9
+UNION ALL SELECT N'QLSV_TongHop', COUNT(*) FROM QLSV_TongHop.sys.tables;            -- 5
 GO

@@ -212,33 +212,15 @@ GO
    PHẦN 3. MINH HỌA – dữ liệu nằm ở node nào (dùng cho báo cáo và demo)
    ===================================================================== */
 
-SELECT N'GiangVien' AS Bang,
-       (SELECT COUNT(*) FROM QLSV_TapTrung.dbo.GiangVien) AS TapTrung, NULL AS TongHop,
-       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.GiangVien)     AS CNTT,
-       (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.GiangVien) AS NgoaiNgu,
-       (SELECT COUNT(*) FROM QLSV_DuLich.dbo.GiangVien)   AS DuLich
-UNION ALL SELECT N'Lop',
-       (SELECT COUNT(*) FROM QLSV_TapTrung.dbo.Lop), NULL,
-       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.Lop),
-       (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.Lop),
-       (SELECT COUNT(*) FROM QLSV_DuLich.dbo.Lop)
-UNION ALL SELECT N'SinhVien (mảnh học vụ)',
-       (SELECT COUNT(*) FROM QLSV_TapTrung.dbo.SinhVien), NULL,
-       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.SinhVien),
-       (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.SinhVien),
-       (SELECT COUNT(*) FROM QLSV_DuLich.dbo.SinhVien)
-UNION ALL SELECT N'SinhVien_HoSo (mảnh dọc nhạy cảm)',
-       NULL, (SELECT COUNT(*) FROM QLSV_TongHop.dbo.SinhVien_HoSo), NULL, NULL, NULL
-UNION ALL SELECT N'LopHocPhan',
-       (SELECT COUNT(*) FROM QLSV_TapTrung.dbo.LopHocPhan), NULL,
-       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.LopHocPhan),
-       (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.LopHocPhan),
-       (SELECT COUNT(*) FROM QLSV_DuLich.dbo.LopHocPhan)
-UNION ALL SELECT N'DangKy',
-       (SELECT COUNT(*) FROM QLSV_TapTrung.dbo.DangKy), NULL,
-       (SELECT COUNT(*) FROM QLSV_CNTT.dbo.DangKy),
-       (SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.DangKy),
-       (SELECT COUNT(*) FROM QLSV_DuLich.dbo.DangKy);
+DECLARE @sql NVARCHAR(MAX);
+SELECT @sql = STRING_AGG(CONVERT(NVARCHAR(MAX), N'SELECT N''' + value + N''' AS Bang, '
+            + N'(SELECT COUNT(*) FROM QLSV_TapTrung.dbo.' + value + N') AS TapTrung, '
+            + N'(SELECT COUNT(*) FROM QLSV_CNTT.dbo.'     + value + N') AS CNTT, '
+            + N'(SELECT COUNT(*) FROM QLSV_NgoaiNgu.dbo.' + value + N') AS NgoaiNgu, '
+            + N'(SELECT COUNT(*) FROM QLSV_DuLich.dbo.'   + value + N') AS DuLich'), N' UNION ALL ')
+FROM STRING_SPLIT(N'GiangVien,Lop,SinhVien,LopHocPhan,DangKy', N',');
+EXEC (@sql);                                                              -- bảng phân mảnh: tổng 3 node = bản tập trung
+SELECT N'SinhVien_HoSo (mảnh dọc, chỉ ở TongHop)' AS Bang, COUNT(*) AS SoDong FROM QLSV_TongHop.dbo.SinhVien_HoSo;
 GO
 
 -- Một sinh viên được ghép lại từ 2 mảnh dọc ở 2 database khác nhau
