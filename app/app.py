@@ -46,8 +46,8 @@ HUY_HIEU_KHOA = {"CNTT": "blue", "NN": "orange", "DL": "green", "TH": "violet"} 
 HUY_HIEU_VAI_TRO = {"lg_admin": "red", "lg_daotao": "violet", "lg_giaovu_cntt": "blue",
                     "lg_giaovu_nn": "orange", "lg_giaovu_dl": "green", "lg_bgh": "gray"}
 HOC_LUC = {"Giỏi": ("#16a34a", "#dcfce7"), "Khá": ("#2563eb", "#dbeafe"), "Trung bình": ("#eab308", "#fef9c3"),
-           "Yếu": ("#f97316", "#ffedd5"), "Không đạt": ("#dc2626", "#fee2e2")}              # (màu đậm, nền nhạt)
-HOC_LUC_COT = {"Gioi": "Giỏi", "Kha": "Khá", "TrungBinh": "Trung bình", "Yeu": "Yếu", "KhongDat": "Không đạt"}
+           "Không đạt": ("#dc2626", "#fee2e2")}              # (màu đậm, nền nhạt)
+HOC_LUC_COT = {"Gioi": "Giỏi", "Kha": "Khá", "TrungBinh": "Trung bình", "KhongDat": "Không đạt"}
 # Tên cột của CSDL -> nhãn tiếng Việt hiện trên bảng (cột không có ở đây giữ nguyên tên)
 NHAN_COT = {"DiemQT": "Điểm quá trình", "DiemThi": "Điểm thi", "DiemTK": "Điểm tổng kết", "DiemTB": "Điểm TB",
             "DiemTBTichLuy": "Điểm TB tích lũy", "TyLeDat": "Tỷ lệ đạt", "MaSV": "Mã SV", "HoTen": "Họ tên",
@@ -55,7 +55,7 @@ NHAN_COT = {"DiemQT": "Điểm quá trình", "DiemThi": "Điểm thi", "DiemTK":
             "TenKhoa": "Khoa", "TrangThai": "Trạng thái", "MaHK": "Học kỳ", "MaMH": "Mã môn", "TenMH": "Môn học",
             "SoTinChi": "Tín chỉ", "MaLHP": "Lớp học phần", "MaGV": "Giảng viên", "KetQua": "Kết quả",
             "SoSinhVien": "Số sinh viên", "SoLuotDangKy": "Lượt đăng ký", "SoLuotCoDiem": "Lượt có điểm",
-            "Gioi": "Giỏi", "Kha": "Khá", "TrungBinh": "Trung bình", "Yeu": "Yếu", "KhongDat": "Không đạt",
+            "Gioi": "Giỏi", "Kha": "Khá", "TrungBinh": "Trung bình", "KhongDat": "Không đạt",
             "SiSoToiDa": "Sĩ số tối đa", "DaDangKy": "Đã đăng ký", "NgayDangKy": "Ngày đăng ký", "Nhom": "Nhóm",
             "SoMonCoDiem": "Số môn có điểm", "SoMon": "Số môn có điểm",
             "SoMonKhongDat": "Môn không đạt", "LyDo": "Lý do cảnh báo", "TinChiTichLuy": "Tín chỉ tích lũy", "NodeKhoa": "Node",
@@ -154,7 +154,7 @@ def xem(sql, *tham_so):
 def muc_hoc_luc(v):
     if pd.isna(v):
         return None
-    return "Giỏi" if v >= 8 else "Khá" if v >= 6.5 else "Trung bình" if v >= 5 else "Yếu" if v >= 4 else "Không đạt"
+    return "Giỏi" if v >= 8 else "Khá" if v >= 6.5 else "Trung bình" if v >= 5 else "Không đạt"
 
 
 def o_diem(v):
@@ -398,7 +398,7 @@ def thong_ke():
                  alt.Tooltip("SoLuot", title="Số lượt"), alt.Tooltip("TyLe", title="Tỷ lệ", format=".1%")]).add_params(chon_hl)
     with st.container(border=True):
         st.altair_chart(thanh.properties(height=70 + 44 * len(ph)).configure_view(stroke=None), width="stretch")
-    st.caption("Giỏi ≥ 8 · Khá ≥ 6,5 · Trung bình ≥ 5 · Yếu ≥ 4 · Không đạt < 4. Bấm một mức ở chú giải để làm nổi bật.")
+    st.caption("Giỏi ≥ 8 · Khá ≥ 6,5 · Trung bình ≥ 5 · Không đạt < 5. Bấm một mức ở chú giải để làm nổi bật.")
     bang(ph, diem=["DiemTB"])
 
     try:                                   # hàm này chỉ cấp cho Đào tạo và Quản trị; vai trò khác thì bỏ qua phần xếp hạng
@@ -551,7 +551,7 @@ def bang_diem():
 def canh_bao():
     """Sinh viên cần chú ý: điểm TB tích lũy dưới ngưỡng, hoặc số môn không đạt từ một mức trở lên."""
     df = xem("SELECT MaSV, HoTen, TenLop, TenKhoa, COUNT(DiemTK) AS SoMonCoDiem, "
-             "SUM(CASE WHEN DiemTK < 4 THEN 1 ELSE 0 END) AS SoMonKhongDat, "
+             "SUM(CASE WHEN DiemTK < 5 THEN 1 ELSE 0 END) AS SoMonKhongDat, "
              "CAST(SUM(DiemTK * SoTinChi) / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS DiemTBTichLuy "
              "FROM dbo.vw_BangDiem GROUP BY MaSV, HoTen, TenLop, TenKhoa HAVING COUNT(DiemTK) > 0")
     if df is None:
@@ -1176,14 +1176,14 @@ def cot_bang(cot, gia_tri):
 
 BAI_KIEM_THU = [
     # (nhóm, tên, mong đợi, câu lệnh, hàm kiểm tra trên danh sách DataFrame trả về)
-    ("Hàm", "fn_XepLoaiDiem: đúng các ngưỡng 8 / 4 / 3,9 / NULL", "Giỏi, Yếu, Không đạt, Chưa có điểm",
-     "SELECT d AS Diem, dbo.fn_XepLoaiDiem(d) AS XepLoai FROM (VALUES (CAST(8 AS DECIMAL(4,2)), 1), (4, 2), (3.9, 3), (NULL, 4)) v(d, i) ORDER BY i",
-     cot_bang("XepLoai", ["Giỏi", "Yếu", "Không đạt", "Chưa có điểm"])),
+    ("Hàm", "fn_XepLoaiDiem: đúng các ngưỡng 8 / 5 / 4,9 / NULL", "Giỏi, Trung bình, Không đạt, Chưa có điểm",
+     "SELECT d AS Diem, dbo.fn_XepLoaiDiem(d) AS XepLoai FROM (VALUES (CAST(8 AS DECIMAL(4,2)), 1), (5, 2), (4.9, 3), (NULL, 4)) v(d, i) ORDER BY i",
+     cot_bang("XepLoai", ["Giỏi", "Trung bình", "Không đạt", "Chưa có điểm"])),
     ("Hàm", "fn_DiemTBTichLuy, fn_TinChiTichLuy: khớp với tính trực tiếp từ bảng điểm (sinh viên 24010001)",
      "Hai cột Hàm và Tính tay bằng nhau",
      "SELECT dbo.fn_DiemTBTichLuy('24010001') AS DiemTB_Ham, "
      "CAST(SUM(DiemTK * SoTinChi) / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS DiemTB_TinhTay, "
-     "dbo.fn_TinChiTichLuy('24010001') AS TinChi_Ham, SUM(CASE WHEN DiemTK >= 4 THEN SoTinChi ELSE 0 END) AS TinChi_TinhTay, "
+     "dbo.fn_TinChiTichLuy('24010001') AS TinChi_Ham, SUM(CASE WHEN DiemTK >= 5 THEN SoTinChi ELSE 0 END) AS TinChi_TinhTay, "
      "dbo.fn_XepLoaiHocLuc('24010001') AS XepLoai FROM dbo.vw_BangDiem WHERE MaSV = '24010001'",
      lambda kq: kq[0].iloc[0]["DiemTB_Ham"] == kq[0].iloc[0]["DiemTB_TinhTay"]
                 and kq[0].iloc[0]["TinChi_Ham"] == kq[0].iloc[0]["TinChi_TinhTay"]),
@@ -1369,8 +1369,8 @@ def danh_muc():
                 kh = a.selectbox("Khoa phụ trách", ds, index=ds.index(r["MaKhoa"]) if r and r["MaKhoa"] in ds else 0,
                                  format_func=lambda k: "Môn chung toàn trường" if k is None else KHOA[k])
                 if st.form_submit_button("Lưu môn học", type="primary", icon=":material/save:"):
-                    luu_danh_muc("EXEC dbo.dm_LuuMonHoc @MaMH = ?, @TenMH = ?, @SoTinChi = ?, @LoaiMH = ?, @MaKhoa = ?",
-                                 ma.strip(), ten.strip(), int(tc), loai, kh, ok=f"Đã lưu môn {ma.strip()}.", dong_bo=True)
+                    luu_danh_muc("EXEC dbo.dm_LuuMonHoc @MaMH = ?, @TenMH = ?, @SoTinChi = ?, @LoaiMH = ?, @MaKhoa = ?, @ThemMoi = ?",
+                                 ma.strip(), ten.strip(), int(tc), loai, kh, r is None, ok=f"Đã lưu môn {ma.strip()}.", dong_bo=True)
     with t[1]:
         st.caption("Cũng là danh mục nhân bản: lưu xong tự đồng bộ xuống 3 node.")
         df = xem("SELECT MaHK, TenHK, NamHoc, NgayBatDau, NgayKetThuc FROM dbo.HocKy ORDER BY NgayBatDau")
@@ -1386,8 +1386,8 @@ def danh_muc():
                 bd = b.date_input("Ngày bắt đầu", r["NgayBatDau"] if r else date.today())
                 kt = a.date_input("Ngày kết thúc", r["NgayKetThuc"] if r else date.today())
                 if st.form_submit_button("Lưu học kỳ", type="primary", icon=":material/save:"):
-                    luu_danh_muc("EXEC dbo.dm_LuuHocKy @MaHK = ?, @TenHK = ?, @NamHoc = ?, @NgayBatDau = ?, @NgayKetThuc = ?",
-                                 ma.strip(), ten, nam.strip(), bd, kt, ok=f"Đã lưu học kỳ {ma.strip()}.", dong_bo=True)
+                    luu_danh_muc("EXEC dbo.dm_LuuHocKy @MaHK = ?, @TenHK = ?, @NamHoc = ?, @NgayBatDau = ?, @NgayKetThuc = ?, @ThemMoi = ?",
+                                 ma.strip(), ten, nam.strip(), bd, kt, r is None, ok=f"Đã lưu học kỳ {ma.strip()}.", dong_bo=True)
     with t[2]:
         st.caption("Giảng viên được phân mảnh ngang theo khoa: mỗi người chỉ nằm ở node của khoa mình.")
         df = xem(BA_NODE.format("GiangVien") + " ORDER BY MaKhoa, MaGV")
@@ -1408,7 +1408,7 @@ def danh_muc():
                 sdt = b.text_input("Điện thoại (không bắt buộc)", (r["DienThoai"] or "") if r else "", max_chars=10)
                 if st.form_submit_button("Lưu giảng viên", type="primary", icon=":material/save:"):
                     luu_danh_muc("EXEC dbo.dm_LuuGiangVien @MaGV = ?, @HoTen = ?, @GioiTinh = ?, @NgaySinh = ?, @HocVi = ?, @Email = ?, "
-                                 "@MaKhoa = ?, @DienThoai = ?", ma.strip(), ten.strip(), gt, ns, hv, email.strip(), kh, sdt.strip() or None,
+                                 "@MaKhoa = ?, @DienThoai = ?, @ThemMoi = ?", ma.strip(), ten.strip(), gt, ns, hv, email.strip(), kh, sdt.strip() or None, r is None,
                                  ok=f"Đã lưu giảng viên {ma.strip()} ở node {KHOA[kh]}.")
     with t[3]:
         st.caption("Lớp cũng nằm ở node của khoa. Giảng viên chủ nhiệm phải thuộc cùng khoa.")
@@ -1429,16 +1429,16 @@ def danh_muc():
                 cn = b.selectbox("Giảng viên chủ nhiệm", ds, index=ds.index(r["MaGVCN"]) if r and r["MaGVCN"] in ds else 0,
                                  format_func=lambda m: "Chưa phân công" if m is None else f"{m} - {ten_gv[m]}")
                 if st.form_submit_button("Lưu lớp", type="primary", icon=":material/save:"):
-                    luu_danh_muc("EXEC dbo.dm_LuuLop @MaLop = ?, @TenLop = ?, @NienKhoa = ?, @MaKhoa = ?, @MaGVCN = ?",
-                                 ma.strip(), ten.strip(), nk.strip(), kh, cn, ok=f"Đã lưu lớp {ma.strip()} ở node {KHOA[kh]}.")
+                    luu_danh_muc("EXEC dbo.dm_LuuLop @MaLop = ?, @TenLop = ?, @NienKhoa = ?, @MaKhoa = ?, @MaGVCN = ?, @ThemMoi = ?",
+                                 ma.strip(), ten.strip(), nk.strip(), kh, cn, r is None, ok=f"Đã lưu lớp {ma.strip()} ở node {KHOA[kh]}.")
 
 
-TEP_VAI_TRO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "14_demo_vai_tro.sql")
+TEP_VAI_TRO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "13_demo_vai_tro.sql")
 VAI_TRO_THU = ["lg_admin", "lg_daotao", "lg_giaovu_cntt", "lg_giaovu_nn", "lg_bgh"]
 
 
 def lo_demo_vai_tro():
-    """Lô lệnh thử 8 việc trong database/14_demo_vai_tro.sql (cùng file dùng khi demo bằng công cụ SQL)."""
+    """Lô lệnh thử 8 việc trong database/13_demo_vai_tro.sql (cùng file dùng khi demo bằng công cụ SQL)."""
     with open(TEP_VAI_TRO, encoding="utf-8-sig") as f:
         return next(lo for lo in re.split(r"^\s*GO\s*$", f.read(), flags=re.M) if "DECLARE @kq" in lo)
 
@@ -1467,13 +1467,13 @@ def thu_vai_tro(login, lo):
 
 
 def phan_quyen():
-    st.caption("Trang đóng vai từng tài khoản (EXECUTE AS LOGIN) và thử cùng 8 việc trong `database/14_demo_vai_tro.sql`. "
+    st.caption("Trang đóng vai từng tài khoản (EXECUTE AS LOGIN) và thử cùng 8 việc trong `database/13_demo_vai_tro.sql`. "
                "Mọi lệnh ghi đều hoàn tác. Ô xanh: SQL Server cho phép; ô đỏ: SQL Server từ chối, kèm mã lỗi.")
     if st.button("Thử 8 việc với 5 vai trò", type="primary", icon=":material/play_arrow:"):
         try:
             lo = lo_demo_vai_tro()
         except (OSError, StopIteration):
-            st.error("Không đọc được database/14_demo_vai_tro.sql.")
+            st.error("Không đọc được database/13_demo_vai_tro.sql.")
             return
         kq, loi_ds = {}, []
         with st.spinner("Đang thử dưới từng vai trò..."):

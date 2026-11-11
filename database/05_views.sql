@@ -113,7 +113,7 @@ SELECT s.MaSV, s.HoTen, s.TenLop, s.MaKhoa, s.TenKhoa,
        d.MaHK, d.MaLHP, d.MaMH, d.TenMH, d.SoTinChi,
        d.DiemQT, d.DiemThi, d.DiemTK,
        CASE WHEN d.DiemTK IS NULL THEN N'Chưa có điểm'
-            WHEN d.DiemTK >= 4     THEN N'Đạt'
+            WHEN d.DiemTK >= 5     THEN N'Đạt'
             ELSE N'Không đạt' END AS KetQua
 FROM dbo.vw_DangKy_ToanCuc d
 JOIN dbo.vw_SinhVien_ToanCuc s ON s.MaSV = d.MaSV;
@@ -127,8 +127,8 @@ SELECT MaKhoa, TenKhoa, MaHK,
        COUNT(*)              AS SoLuotDangKy,
        COUNT(DiemTK)         AS SoLuotCoDiem,
        CAST(AVG(DiemTK) AS DECIMAL(4,2)) AS DiemTB,
-       SUM(CASE WHEN DiemTK < 4 THEN 1 ELSE 0 END) AS SoLuotKhongDat,
-       CAST(100.0 * SUM(CASE WHEN DiemTK >= 4 THEN 1 ELSE 0 END)
+       SUM(CASE WHEN DiemTK < 5 THEN 1 ELSE 0 END) AS SoLuotKhongDat,
+       CAST(100.0 * SUM(CASE WHEN DiemTK >= 5 THEN 1 ELSE 0 END)
             / NULLIF(COUNT(DiemTK), 0) AS DECIMAL(5,2)) AS TyLeDat,
        SUM(DiemTK)           AS TongDiem      -- để gộp nhiều khoa cho đúng: điểm TB = SUM(TongDiem) / SUM(SoLuotCoDiem)
 FROM dbo.vw_BangDiem

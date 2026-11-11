@@ -90,7 +90,7 @@ GO
    được khóa ngoại tham chiếu). @MaKhoa NULL = đồng bộ cả 3 node. */
 CREATE OR ALTER PROCEDURE dbo.sp_DongBoDanhMuc
     @MaKhoa VARCHAR(10) = NULL,
-    @ImLang BIT = 0                 -- 1: không trả bảng kết quả (khi được gọi từ dm_XuLyHangDoi, 15_dong_bo_danh_muc.sql)
+    @ImLang BIT = 0                 -- 1: không trả bảng kết quả (khi được gọi từ dm_XuLyHangDoi, 14_dong_bo_danh_muc.sql)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -152,7 +152,7 @@ BEGIN
         END
         CLOSE c;
         DEALLOCATE c;
-        -- node vừa đồng bộ xong thì không còn gì chờ trong hàng đợi (bảng tạo ở 15_dong_bo_danh_muc.sql)
+        -- node vừa đồng bộ xong thì không còn gì chờ trong hàng đợi (bảng tạo ở 14_dong_bo_danh_muc.sql)
         IF OBJECT_ID(N'dbo.HangDoiDongBo') IS NOT NULL
             DELETE dbo.HangDoiDongBo WHERE @MaKhoa IS NULL OR MaKhoa = @MaKhoa;
         COMMIT;
@@ -398,7 +398,7 @@ BEGIN
     ORDER BY MaHK, MaMH;
 
     SELECT COUNT(DiemTK) AS SoMonCoDiem,
-           SUM(CASE WHEN DiemTK >= 4 THEN SoTinChi ELSE 0 END) AS TinChiTichLuy,
+           SUM(CASE WHEN DiemTK >= 5 THEN SoTinChi ELSE 0 END) AS TinChiTichLuy,
            CAST(SUM(DiemTK * SoTinChi)
                 / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS DiemTBTichLuy
     FROM dbo.vw_BangDiem
@@ -410,7 +410,7 @@ GO
 /* ---------- 7. sp_ThongKeKhoa ----------
    Phân bố học lực theo khoa. Cả hai tham số NULL = toàn trường, mọi học kỳ.
    Giáo vụ chỉ thấy khoa của mình dù truyền @MaKhoa nào: vw_BangDiem đã lọc theo dbo.PhamViKhoaCuaToi (05_views.sql).
-   Thang: Giỏi >= 8; Khá >= 6,5; Trung bình >= 5; Yếu >= 4; Không đạt < 4. */
+   Thang: Giỏi >= 8; Khá >= 6,5; Trung bình >= 5; Không đạt < 5. */
 CREATE OR ALTER PROCEDURE dbo.sp_ThongKeKhoa
     @MaKhoa  VARCHAR(10) = NULL,
     @MaHK    VARCHAR(10) = NULL
@@ -424,8 +424,7 @@ BEGIN
            SUM(CASE WHEN DiemTK >= 8                  THEN 1 ELSE 0 END) AS Gioi,
            SUM(CASE WHEN DiemTK >= 6.5 AND DiemTK < 8 THEN 1 ELSE 0 END) AS Kha,
            SUM(CASE WHEN DiemTK >= 5   AND DiemTK < 6.5 THEN 1 ELSE 0 END) AS TrungBinh,
-           SUM(CASE WHEN DiemTK >= 4   AND DiemTK < 5 THEN 1 ELSE 0 END) AS Yeu,
-           SUM(CASE WHEN DiemTK < 4                   THEN 1 ELSE 0 END) AS KhongDat
+           SUM(CASE WHEN DiemTK < 5                   THEN 1 ELSE 0 END) AS KhongDat
     FROM dbo.vw_BangDiem
     WHERE (@MaKhoa IS NULL OR MaKhoa = @MaKhoa)
       AND (@MaHK   IS NULL OR MaHK   = @MaHK)

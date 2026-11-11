@@ -1,6 +1,6 @@
 /* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
-   File   : 14_demo_vai_tro.sql
+   File   : 13_demo_vai_tro.sql
    Mục đích: Demo sự khác nhau giữa các vai trò. Chạy NGUYÊN file này 4 lần, mỗi lần đăng nhập bằng
              một tài khoản khác (lg_admin, lg_daotao, lg_giaovu_cntt, lg_bgh), rồi so 4 bảng kết quả.
    Đăng nhập: server localhost, cổng 14330 (instance điều phối), SQL Server authentication,

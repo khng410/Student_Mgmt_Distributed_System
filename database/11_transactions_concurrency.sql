@@ -249,7 +249,7 @@ GO
 
 /* =====================================================================
    E2. Tạo index thật cho bảng DangKy ở 3 node khoa
-   (chạy lại 02_node_va_linked_server.sql sẽ xóa bảng và index này -> chạy lại phần E2)
+   (chạy lại 02_create_nodes.sql sẽ xóa bảng và index này -> chạy lại phần E2)
    ===================================================================== */
 DECLARE @tpl NVARCHAR(MAX) = N'
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N''IX_DangKy_MaLHP'' AND object_id = OBJECT_ID(N''dbo.DangKy''))

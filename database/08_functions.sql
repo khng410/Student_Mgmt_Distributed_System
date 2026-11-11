@@ -7,9 +7,9 @@
    Chạy sau : 07_procedures.sql           Chạy lại nhiều lần được (CREATE OR ALTER).
 
    #  Hàm                      Loại            Việc làm
-   1  fn_XepLoaiDiem           scalar          điểm 0-10 -> Giỏi/Khá/Trung bình/Yếu/Không đạt
+   1  fn_XepLoaiDiem           scalar          điểm 0-10 -> Giỏi/Khá/Trung bình/Không đạt
    2  fn_DiemTBTichLuy         scalar          điểm TB tích lũy của 1 sinh viên (trọng số = tín chỉ)
-   3  fn_TinChiTichLuy         scalar          số tín chỉ đã đạt (điểm >= 4) của 1 sinh viên
+   3  fn_TinChiTichLuy         scalar          số tín chỉ đã đạt (điểm >= 5) của 1 sinh viên
    4  fn_XepLoaiHocLuc         scalar          xếp loại học lực của 1 sinh viên (gọi hàm 1 và 2)
    5  fn_SiSoLopHocPhan        scalar          số sinh viên đã đăng ký 1 lớp học phần
    6  fn_BangDiemSinhVien      table-valued    bảng điểm 1 sinh viên (theo học kỳ hoặc tất cả)
@@ -18,7 +18,7 @@
 
    Quy ước: DiemTK NULL = chưa có điểm, không tính vào trung bình/tín chỉ.
    Thang xếp loại (khớp sp_ThongKeKhoa): Giỏi >= 8; Khá >= 6,5; Trung bình >= 5;
-   Yếu >= 4; Không đạt < 4.
+   Không đạt < 5.
    Hàm không thể dùng SQL động, nên các hàm đọc thẳng qua VIEW ở 05_views.sql.
    Hàm 7 và 8 tự gom nhóm điểm TB thay vì gọi hàm 2 cho từng dòng: mỗi lần gọi hàm scalar là một lượt
    đọc VIEW qua 3 node, gọi cho cả lớp sẽ chậm hơn nhiều.
@@ -42,7 +42,6 @@ BEGIN
                 WHEN @Diem >= 8    THEN N'Giỏi'
                 WHEN @Diem >= 6.5  THEN N'Khá'
                 WHEN @Diem >= 5    THEN N'Trung bình'
-                WHEN @Diem >= 4    THEN N'Yếu'
                 ELSE N'Không đạt' END;
 END
 GO
@@ -68,7 +67,7 @@ AS
 BEGIN
     RETURN (SELECT ISNULL(SUM(SoTinChi), 0)
             FROM dbo.vw_BangDiem
-            WHERE MaSV = @MaSV AND DiemTK >= 4);
+            WHERE MaSV = @MaSV AND DiemTK >= 5);
 END
 GO
 
@@ -150,7 +149,7 @@ GO
 
 -- 1. fn_XepLoaiDiem: thử mọi ngưỡng
 SELECT d AS Diem, dbo.fn_XepLoaiDiem(d) AS XepLoai
-FROM (VALUES (CAST(9.5 AS DECIMAL(4,2))), (8.00), (7.00), (5.50), (4.00), (3.90), (NULL)) v(d);
+FROM (VALUES (CAST(9.5 AS DECIMAL(4,2))), (8.00), (7.00), (5.00), (4.90), (NULL)) v(d);
 GO
 
 -- 2, 3, 4. Điểm TB tích lũy, tín chỉ tích lũy, xếp loại của từng sinh viên lớp 66.CNTT-1

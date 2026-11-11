@@ -29,7 +29,8 @@ MONG_DOI = {
     ],
     "08_functions.sql": [
         ("fn_XepLoaiDiem đúng ngưỡng: 8 là Giỏi", r"^8\.00 \| Giỏi$"),
-        ("fn_XepLoaiDiem đúng ngưỡng: 4 là Yếu, 3.9 là Không đạt", r"^3\.90 \| Không đạt$"),
+        ("fn_XepLoaiDiem đúng ngưỡng: 5 là Trung bình", r"^5\.00 \| Trung bình$"),
+        ("fn_XepLoaiDiem đúng ngưỡng: 4.9 là Không đạt", r"^4\.90 \| Không đạt$"),
         ("fn_XepLoaiDiem: chưa có điểm", r"^None \| Chưa có điểm$"),
         ("fn_DiemTBTichLuy/fn_TinChiTichLuy/fn_XepLoaiHocLuc của 24010001", r"^24010001 \| Trần Thành Huy \| 6\.89 \| 34 \| Khá$"),
         ("fn_SiSoLopHocPhan đếm đúng sĩ số lớp CNTT110", r"^CNTT110-HK1-2627-01 \| 21 \| 50$"),
@@ -60,7 +61,7 @@ MONG_DOI = {
         ("E2. Index thật có ở node CNTT", r"^QLSV_CNTT \| IX_DangKy_MaLHP \| NONCLUSTERED$"),
         ("E2. Index thật có ở node Du lịch", r"^QLSV_DuLich \| IX_DangKy_MaLHP \| NONCLUSTERED$"),
     ],
-    "15_dong_bo_danh_muc.sql": [
+    "14_dong_bo_danh_muc.sql": [
         ("Sửa qua dm_LuuMonHoc: cả 3 bản sao đổi ngay", r"^Sau dm_LuuMonHoc \| 4\. Node Du lịch \(bản sao\) \| .*\(sửa qua thủ tục\)$"),
         ("... và hàng đợi rỗng", r"^Sau dm_LuuMonHoc: số mục còn chờ \| 0$"),
         ("Sửa thẳng bằng UPDATE: trigger xếp mục cho từng node", r"^Sau UPDATE thẳng: hàng đợi \| DL \| MonHoc \| NN101 \| UPDATE$"),

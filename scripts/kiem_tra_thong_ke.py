@@ -11,7 +11,7 @@ RAW = " UNION ALL ".join(f"SELECT '{k}' AS K, d.MaSV, lp.MaHK, d.DiemQT, d.DiemT
 def mong_doi(khoa):
     ds = ",".join(f"'{k}'" for k in khoa)
     # điểm tổng kết tính lại từ công thức 0,4 QT + 0,6 Thi, không dùng cột DiemTK
-    rows = c.execute(f"""SELECT MaHK, COUNT(DISTINCT MaSV), COUNT(*), COUNT(tk), AVG(tk), 100.0 * SUM(CASE WHEN tk >= 4 THEN 1 ELSE 0 END) / NULLIF(COUNT(tk), 0)
+    rows = c.execute(f"""SELECT MaHK, COUNT(DISTINCT MaSV), COUNT(*), COUNT(tk), AVG(tk), 100.0 * SUM(CASE WHEN tk >= 5 THEN 1 ELSE 0 END) / NULLIF(COUNT(tk), 0)
         FROM (SELECT *, CAST(ROUND(0.4 * DiemQT + 0.6 * DiemThi, 1) AS DECIMAL(4,2)) AS tk FROM ({RAW}) r WHERE K IN ({ds})) x GROUP BY MaHK""").fetchall()
     rows = sorted(rows, key=lambda r: (r[0][4:], r[0][:3]))
     chot = [r for r in rows if r[3] * 2 >= r[2]]

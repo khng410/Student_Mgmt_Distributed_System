@@ -181,7 +181,7 @@ theo tên như `12_linked_server.png`.
 
 | Dấu hiệu | Nguyên nhân thường gặp |
 | --- | --- |
-| `Could not find server 'LS_QLSV_...'` | Chưa chạy `02_node_va_linked_server.sql` |
+| `Could not find server 'LS_QLSV_...'` | Chưa chạy `02_create_nodes.sql` |
 | 7416 `no login-mapping exists` | Linked Server có `@provstr`; bỏ chuỗi đó và chạy lại `02`, rồi `03` đến `10` |
 | `Login failed for user ...` ở node | Chưa chạy `10_security.sql` (login phải có ở cả 4 instance) hoặc sai mật khẩu ánh xạ |
 | 7395 / 1206 | Xem bảng xử lý sự cố ở README |
@@ -197,7 +197,7 @@ Mục đích: có bằng chứng cho yêu cầu kỹ thuật số 12 và demo m�
 
 1. Mở `11_transactions_concurrency.sql`, chạy từ dòng `PHẦN E` đến hết file (chọn đoạn rồi chạy). Các khối blocking và deadlock ở giữa nằm trong comment nên chạy cả file cũng an toàn.
 2. **E1** (bảng thử 300.000 dòng ở tempdb): tự tạo, đo và xóa; không đụng dữ liệu thật.
-3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02_node_va_linked_server.sql` thì index mất, chạy lại E2.
+3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02_create_nodes.sql` thì index mất, chạy lại E2.
 
 ### Kết quả mong đợi (đã đo trên SQL Server Docker)
 
@@ -440,7 +440,7 @@ Mỗi khối demo đều có **bằng chứng tự kiểm** ngay trong kết qu�
 
 | Phần | File, khối chạy | Chỉ cho giảng viên | Kết quả đúng |
 | --- | --- | --- | --- |
-| Hàm | `08_functions.sql`, phần GỌI THỬ | `fn_XepLoaiDiem` với các giá trị ở ngay ngưỡng | 8 là Giỏi, 4 là Yếu, 3,9 là Không đạt, NULL là Chưa có điểm |
+| Hàm | `08_functions.sql`, phần GỌI THỬ | `fn_XepLoaiDiem` với các giá trị ở ngay ngưỡng | 8 là Giỏi, 5 là Trung bình, 4,9 là Không đạt, NULL là Chưa có điểm |
 | | | Điểm TB tích lũy, tín chỉ, xếp loại lớp 66.CNTT-1 | 24010001: 6.89, 34 tín chỉ, Khá |
 | | | Kiểm tra chéo cuối file | 0 dòng: hai cách tính độc lập cho cùng một kết quả |
 | Thủ tục | `07_procedures.sql`, phần VÍ DỤ GỌI | `sp_ThemSinhVien` thành công, rồi trùng CCCD | Lỗi 2627, sau đó node CNTT `0` dòng: ghi 2 instance, lỗi ở instance thứ hai hủy cả hai |
@@ -485,7 +485,7 @@ container `sql_server_local` cũ, không thuộc đồ án). Kiểm tra lại ô
 Luôn nối vào **cổng 14330** (điều phối): phân quyền theo vai trò nằm ở đây. Nối thẳng vào cổng node (14331–14333) sẽ bỏ qua
 lớp phân quyền này (xem README, mục "Giới hạn đã biết").
 
-**Chạy** `database/14_demo_vai_tro.sql` ở từng kết nối. File thử cùng 8 việc và trả về **một bảng** "Được / BỊ TỪ CHỐI";
+**Chạy** `database/13_demo_vai_tro.sql` ở từng kết nối. File thử cùng 8 việc và trả về **một bảng** "Được / BỊ TỪ CHỐI";
 mọi lệnh ghi đều hoàn tác. Đặt 4 bảng cạnh nhau là thấy ngay sự khác nhau. Kết quả đúng (đã chạy thử):
 
 | # | Thử làm | `lg_admin` | `lg_daotao` | `lg_giaovu_cntt` | `lg_bgh` |

@@ -24,7 +24,7 @@
    Tổng cộng 30 câu đánh dấu [PT] (đề yêu cầu >= 15).
 
    Quy ước điểm: DiemTK = NULL (chưa đủ DiemQT, DiemThi) không tính vào AVG/MAX/MIN;
-   điểm >= 4 là đạt.
+   điểm >= 5 là đạt.
    ===================================================================== */
 
 SET NOCOUNT ON;
@@ -448,14 +448,14 @@ WHERE NOT EXISTS (
 ORDER BY s.TenKhoa, s.MaSV;
 GO
 
--- Câu 39 (h) [PT]: Sinh viên nào đã học ở HK2-2526 và TẤT CẢ các môn em học kỳ đó đều đạt (>= 4)?
+-- Câu 39 (h) [PT]: Sinh viên nào đã học ở HK2-2526 và TẤT CẢ các môn em học kỳ đó đều đạt (>= 5)?
 --   Môn chưa có điểm (DiemTK NULL) không bị coi là rớt.
 SELECT s.MaSV, s.HoTen, s.TenKhoa
 FROM dbo.vw_SinhVien_ToanCuc s
 WHERE EXISTS (SELECT 1 FROM dbo.vw_DangKy_ToanCuc d
               WHERE d.MaSV = s.MaSV AND d.MaHK = 'HK2-2526')
   AND NOT EXISTS (SELECT 1 FROM dbo.vw_DangKy_ToanCuc d
-                  WHERE d.MaSV = s.MaSV AND d.MaHK = 'HK2-2526' AND d.DiemTK < 4)
+                  WHERE d.MaSV = s.MaSV AND d.MaHK = 'HK2-2526' AND d.DiemTK < 5)
 ORDER BY s.TenKhoa, s.MaSV;
 GO
 

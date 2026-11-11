@@ -26,7 +26,7 @@ cd app && bash chay.sh                # ứng dụng ở http://localhost:8501
 | Trình duyệt tab 2 | Ứng dụng `http://localhost:8501`, chưa đăng nhập |
 | Docker Desktop | Trang Containers (4 container `qlsv_*` màu xanh) |
 | SQLPro / SSMS | Kết nối `sa` tới `localhost,14330`, database `QLSV_TongHop`. Bốn kết nối `lg_*` chỉ cần nếu muốn dự phòng cho phần phân quyền |
-| SQLPro, kết nối `sa` | Mở sẵn các file `12_linked_server.sql`, `11_transactions_concurrency.sql`, `13_dong_bo_kiem_thu.sql`, `14_demo_vai_tro.sql` |
+| SQLPro, kết nối `sa` | Mở sẵn các file `12_linked_server.sql`, `11_transactions_concurrency.sql`, `14_dong_bo_danh_muc.sql`, `13_demo_vai_tro.sql` |
 | Terminal | Ở thư mục gốc dự án |
 
 **Phương án dự phòng:** nếu Docker hoặc máy gặp sự cố, dùng ảnh chụp trong `images/` và báo cáo Word. Không sửa lỗi trước mặt
@@ -184,7 +184,7 @@ sinh viên cho khoa CNTT và Ngoại ngữ (thủ tục chỉ cần node của k
 **Thấy:** Du lịch ✅ khớp, hàng đợi rỗng. Mục Trạng thái node về `4/4`.
 
 **Nói thêm (nếu được hỏi):** trang **Danh mục** sửa môn học, học kỳ qua thủ tục `dm_LuuMonHoc`, `dm_LuuHocKy` nên tự xử lý hàng đợi
-ngay sau khi lưu. Phương án dự phòng không dùng giao diện: `13_dong_bo_kiem_thu.sql` kịch bản 5, `15_dong_bo_danh_muc.sql` phần ví dụ,
+ngay sau khi lưu. Phương án dự phòng không dùng giao diện: `14_dong_bo_danh_muc.sql` kịch bản 5 và phần 6,
 hoặc `python3 -I scripts/thu_mat_ket_noi.py`.
 
 ---
@@ -192,7 +192,7 @@ hoặc `python3 -I scripts/thu_mat_ket_noi.py`.
 ## 8. Phân quyền (2 phút)
 
 **Làm:** ứng dụng, đăng nhập **Quản trị** → trang **Phân quyền** → **Thử 8 việc với 5 vai trò**. (Dự phòng: chạy
-`14_demo_vai_tro.sql` ở 4 kết nối SQLPro `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh` rồi xếp 4 bảng cạnh nhau.)
+`13_demo_vai_tro.sql` ở 4 kết nối SQLPro `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh` rồi xếp 4 bảng cạnh nhau.)
 
 **Thấy:**
 
