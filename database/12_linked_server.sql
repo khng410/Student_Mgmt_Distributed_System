@@ -7,7 +7,7 @@
    Chạy sau : 11_transactions_concurrency.sql, trên instance điều phối (cổng 14330), tài khoản sysadmin.
    Chạy lại nhiều lần được; không sửa dữ liệu (mọi lệnh ghi đều ROLLBACK).
 
-   Linked Server được tạo ở 02b_node_links.sql (LS_QLSV_CNTT, LS_QLSV_NgoaiNgu, LS_QLSV_DuLich), mỗi cái
+   Linked Server được tạo ở 02_node_va_linked_server.sql (LS_QLSV_CNTT, LS_QLSV_NgoaiNgu, LS_QLSV_DuLich), mỗi cái
    trỏ tới một instance riêng: qlsv_cntt, qlsv_ngoaingu, qlsv_dulich. Tên 4 phần:
        LinkedServer.Database.Schema.Table
    ===================================================================== */

@@ -21,7 +21,7 @@ Hệ thống chạy trên **4 instance SQL Server riêng biệt** (4 container D
 Trên instance điều phối, `QLSV_CNTT`, `QLSV_NgoaiNgu`, `QLSV_DuLich` là **database đại diện** chỉ chứa `SYNONYM` trỏ qua Linked Server
 (`LS_QLSV_CNTT`, `LS_QLSV_NgoaiNgu`, `LS_QLSV_DuLich`) tới bảng thật ở instance node. Nhờ vậy tên 3 phần như `QLSV_CNTT.dbo.SinhVien` trong view,
 thủ tục và ứng dụng vẫn chạy nguyên, nhưng thực chất là truy vấn liên instance; ghi vào nhiều node trong một giao dịch dùng MSDTC.
-Chi tiết trong `database/02b_node_links.sql`.
+Chi tiết trong `database/02_node_va_linked_server.sql`.
 
 Cách phân mảnh (chi tiết trong `database/04_fragmentation.sql`):
 
@@ -50,7 +50,7 @@ Kiểm thử đồng bộ: `13_dong_bo_kiem_thu.sql`. Mất kết nối: `script
 ## Cấu trúc thư mục
 
 ```
-database/   16 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b; 14 là file demo vai trò)
+database/   15 script SQL, chạy theo thứ tự số (01 đến 15; 14 là file demo vai trò)
 scripts/    chay_sql.py (chạy file .sql), trien_khai.py (dựng lại cả 4 instance bằng một lệnh),
             thu_mat_ket_noi.py (dừng một node, thử, bật lại, đồng bộ lại),
             kiem_tra_demo.py (chạy 5 file demo, in ĐÚNG / SAI cho từng kết quả cần trình bày)
@@ -80,21 +80,18 @@ docker compose ps           # đợi cả 4 container ở trạng thái (healthy
   muốn đổi sau này phải xóa dữ liệu bằng `docker compose down -v`.
 - Dữ liệu nằm trong volume riêng của từng node nên `docker compose down` và `up` không làm mất dữ liệu; `down -v` mới xóa.
 - Cổng 14330-14333 chỉ mở cho `127.0.0.1` (máy này); các container nối với nhau qua mạng riêng của Docker.
-- Chạy tay `02b_node_links.sql` bằng SSMS: bật SQLCMD Mode và thêm dòng đầu `:setvar SA_MATKHAU "<mật khẩu sa>"` (script `scripts/` làm việc này tự động).
 
 ## Cài đặt cơ sở dữ liệu
 
 **Cách nhanh:** `python3 -I scripts/trien_khai.py` dựng lại toàn bộ (mất khoảng 1 phút) và dừng ngay khi có lỗi.
 
-**Cách thủ công:** chạy từng file bằng tài khoản `sa`, **theo đúng thứ tự**. Chỉ `02a` chạy trên 3 instance node, mỗi node một lần với 2 biến, ví dụ
-`python3 -I scripts/chay_sql.py 14331 database/02a_create_node.sql --bien=NODE_DB=QLSV_CNTT,MA_KHOA=CNTT`; mọi file còn lại chạy trên instance điều phối (cổng 14330).
+**Cách thủ công:** mở từng file trong SQLPro, SSMS hoặc Azure Data Studio, kết nối `localhost,14330` (instance điều phối) bằng `sa`, chạy cả file **theo đúng thứ tự** số. Mọi file đều chạy trên instance điều phối, không có biến phải điền: `02` tự dựng database và bảng ở 3 node từ xa qua Linked Server.
 Mọi file chạy lại được nhiều lần; file lưu UTF-8 có BOM để tiếng Việt hiển thị đúng.
 
 | # | File | Nội dung |
 | --- | --- | --- |
-| 2 | `02_create_tables.sql` | Tạo 5 database ở instance điều phối (xóa bản cũ nếu có) và bảng, khóa, ràng buộc của CSDL tập trung và node điều phối |
-| 2a | `02a_create_node.sql` | Tạo database và bảng cho một node khoa; một file dùng chung cho 3 node (biến `NODE_DB`, `MA_KHOA`) |
-| 2b | `02b_node_links.sql` | 3 Linked Server (điều phối → node), database đại diện với synonym |
+| 1 | `01_create_tables.sql` | Tạo 5 database ở instance điều phối (xóa bản cũ nếu có) và bảng, khóa, ràng buộc của CSDL tập trung và node điều phối |
+| 2 | `02_node_va_linked_server.sql` | 3 Linked Server tới 3 node; dựng database và bảng ở cả 3 node từ xa (một khuôn DDL, mã khoa thay vào); database đại diện với synonym |
 | 3 | `03_seed_data.sql` | Dữ liệu mẫu vào CSDL tập trung (3 khoa, 72 sinh viên, 621 lượt đăng ký) |
 | 4 | `04_fragmentation.sql` | Phân mảnh ngang và dọc sang các node, kiểm tra tái thiết |
 | 5 | `05_views.sql` | 5 view toàn cục, tái thiết và báo cáo |
@@ -110,7 +107,7 @@ Mọi file chạy lại được nhiều lần; file lưu UTF-8 có BOM để ti
 | 15 | `15_dong_bo_danh_muc.sql` | Tự đồng bộ danh mục: hàng đợi `HangDoiDongBo`, trigger xếp hàng, `dm_XuLyHangDoi`; thủ tục quản lý danh mục `dm_LuuMonHoc`, `dm_LuuHocKy`, `dm_LuuGiangVien`, `dm_LuuLop` |
 
 Sau khi chạy `04` và `05`, các bảng kiểm tra ở cuối file phải cho `Thieu = Thua = 0`.
-Chạy lại `02` hoặc `02a` thì phải chạy lại từ `02b` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
+Chạy lại `01` hoặc `02` thì phải chạy lại từ `02` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
 
 ## Tài khoản
 
@@ -197,8 +194,8 @@ Hàng đợi chỉ dành cho danh mục nhân bản. Thao tác ghi dữ liệu p
 | `pyarrow requires NumPy 2.0` | Dùng `bash chay.sh` (môi trường ảo riêng) thay vì môi trường conda cũ |
 | `module 'config' has no attribute ...` | Sửa `config.py` xong phải khởi động lại ứng dụng (Ctrl+C, chạy lại) |
 | Câu truy vấn vào `DangKy` treo mãi | Còn một giao dịch chưa kết thúc ở cửa sổ khác (phần B của `11`): chạy `ROLLBACK TRAN;` ở đó |
-| `02b` báo không nối được node | Container node chưa sẵn sàng (đợi thêm) hoặc chưa `docker compose up -d`; kiểm tra `docker compose ps` |
-| Lỗi 7416 `no login-mapping exists` | Linked Server tạo với `@provstr`: bỏ chuỗi đó (xem `02b`) rồi chạy lại `02b` và `10` |
+| `02` báo không nối được node | Container node chưa sẵn sàng (đợi thêm) hoặc chưa `docker compose up -d`; kiểm tra `docker compose ps` |
+| Lỗi 7416 `no login-mapping exists` | Linked Server tạo với `@provstr`: bỏ chuỗi đó (xem `02`) rồi chạy lại từ `02` đến `10` |
 | Lỗi 7395 `nested transaction ... XACT_ABORT` | Ghi vào node trong `BEGIN TRAN` cần `SET XACT_ABORT ON;` ở đầu phiên |
 | Lỗi 1206 `MS DTC has cancelled` | Một trigger ở node tự ROLLBACK bên trong giao dịch phân tán; chạy lệnh đó trực tiếp trên node (xem demo Trigger 3 ở `09`) |
 

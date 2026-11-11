@@ -97,7 +97,7 @@ def thu_tu_hk(ma):
 # ----------------------------------------------------------------- kết nối và truy vấn
 def ket_noi(user, pwd):
     cs = (f"DRIVER={{{config.DRIVER}}};SERVER={config.SERVER};DATABASE={config.DATABASE};"
-          f"UID={user};PWD={pwd};TrustServerCertificate=yes")
+          f"UID={user};PWD={pwd};TrustServerCertificate=yes;MARS_Connection=yes")     # MARS: cho phép nhiều tập kết quả mở cùng lúc
     conn = pyodbc.connect(cs, autocommit=True, timeout=10)
     conn.timeout = 30          # câu lệnh bị khóa chặn quá 30 giây thì báo lỗi thay vì treo mãi
     return conn
@@ -110,21 +110,36 @@ def loi(e):
     return re.sub(r"\s*\(\d+\)\s*(\(SQLExec\w+\))?\s*['\")]*\s*$", "", msg).strip()
 
 
+@st.cache_resource
+def _kho_khoa():
+    return {"khoa": threading.Lock(), "theo_ket_noi": {}}
+
+
+def khoa_ket_noi(conn=None):
+    """Khóa riêng của kết nối đang dùng. Một phiên đăng nhập chỉ có MỘT kết nối, nhưng có thể bị dùng từ nhiều luồng
+    cùng lúc (mở ứng dụng ở hai tab, hoặc bấm liên tiếp khi trang cũ chưa chạy xong); SQL Server khi đó báo
+    "Connection is busy with results for another command". Mọi lệnh phải giữ khóa này từ lúc chạy tới lúc đọc hết kết quả."""
+    kho, conn = _kho_khoa(), conn or st.session_state.conn
+    with kho["khoa"]:
+        return kho["theo_ket_noi"].setdefault(id(conn), threading.RLock())
+
+
 def chay(sql, *tham_so):
     """Chạy câu lệnh, trả về danh sách DataFrame (mỗi tập kết quả một cái)."""
-    cur = st.session_state.conn.cursor()
-    try:
-        cur.execute(sql, tham_so)
-        kq = []
-        while True:
-            if cur.description:
-                cot = [c[0] for c in cur.description]
-                dong = [tuple(float(v) if isinstance(v, Decimal) else v for v in r) for r in cur.fetchall()]
-                kq.append(pd.DataFrame.from_records(dong, columns=cot))
-            if not cur.nextset():
-                return kq
-    finally:
-        cur.close()
+    with khoa_ket_noi():
+        cur = st.session_state.conn.cursor()
+        try:
+            cur.execute(sql, tham_so)
+            kq = []
+            while True:
+                if cur.description:
+                    cot = [c[0] for c in cur.description]
+                    dong = [tuple(float(v) if isinstance(v, Decimal) else v for v in r) for r in cur.fetchall()]
+                    kq.append(pd.DataFrame.from_records(dong, columns=cot))
+                if not cur.nextset():
+                    return kq
+        finally:
+            cur.close()
 
 
 def xem(sql, *tham_so):
@@ -1430,21 +1445,25 @@ def lo_demo_vai_tro():
 
 def thu_vai_tro(login, lo):
     """Chạy lô lệnh dưới danh nghĩa một login (EXECUTE AS LOGIN) rồi luôn trả kết nối về lg_admin."""
-    cur = st.session_state.conn.cursor()
-    try:
-        if login != st.session_state.user:
-            cur.execute(f"EXECUTE AS LOGIN = '{login}'")              # login lấy từ danh sách cố định VAI_TRO_THU
-        cur.execute("SET NOCOUNT ON; SET XACT_ABORT ON;\n" + lo)
-        while not cur.description:
-            if not cur.nextset():
-                return pd.DataFrame()
-        cot = [c[0] for c in cur.description]
-        return pd.DataFrame.from_records([tuple(r) for r in cur.fetchall()], columns=cot)
-    finally:
+    with khoa_ket_noi():              # giữ khóa suốt lúc đóng vai: không lệnh nào khác được chạy nhờ dưới danh nghĩa login kia
+        cur = st.session_state.conn.cursor()
         try:
-            cur.execute("IF @@TRANCOUNT > 0 ROLLBACK; WHILE SUSER_SNAME() <> ORIGINAL_LOGIN() REVERT;")
+            if login != st.session_state.user:
+                cur.execute(f"EXECUTE AS LOGIN = '{login}'")              # login lấy từ danh sách cố định VAI_TRO_THU
+            cur.execute("SET NOCOUNT ON; SET XACT_ABORT ON;\n" + lo)
+            while not cur.description:
+                if not cur.nextset():
+                    return pd.DataFrame()
+            cot = [c[0] for c in cur.description]
+            kq = pd.DataFrame.from_records([tuple(r) for r in cur.fetchall()], columns=cot)
+            while cur.nextset():          # đọc hết các tập kết quả còn lại trước khi chạy lệnh kế tiếp
+                pass
+            return kq
         finally:
-            cur.close()
+            try:
+                cur.execute("IF @@TRANCOUNT > 0 ROLLBACK; WHILE SUSER_SNAME() <> ORIGINAL_LOGIN() REVERT;")
+            finally:
+                cur.close()
 
 
 def phan_quyen():
@@ -1567,7 +1586,8 @@ def khoi_phuc_phien():
     p = gia_han_phien(ma)
     if p:
         try:
-            p["conn"].cursor().execute("SELECT 1").fetchone()          # kết nối còn sống không?
+            with khoa_ket_noi(p["conn"]):                              # tab khác có thể đang chạy lệnh trên cùng kết nối
+                p["conn"].cursor().execute("SELECT 1").fetchone()      # kết nối còn sống không?
         except pyodbc.Error:
             huy_phien(ma)
             p = None

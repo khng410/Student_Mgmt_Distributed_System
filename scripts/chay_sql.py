@@ -1,7 +1,6 @@
 """Chạy file .sql (tách theo dòng GO) trên một instance. Dùng: python3 -I scripts/chay_sql.py <cổng> <file.sql> [...]
 Cổng: 14330 điều phối, 14331 CNTT, 14332 Ngoại ngữ, 14333 Du lịch. Đăng nhập sa, mật khẩu trong .env.
-Tùy chọn --bien=TEN=GIATRI,...: điền biến kiểu SQLCMD $(TEN) trong file, ví dụ cho 02a_create_node.sql:
-    python3 -I scripts/chay_sql.py 14331 database/02a_create_node.sql --bien=NODE_DB=QLSV_CNTT,MA_KHOA=CNTT"""
+Tùy chọn --bien=TEN=GIATRI,...: điền biến kiểu SQLCMD $(TEN) nếu file có dùng (các file trong database/ hiện không dùng)."""
 import os, re, sys, time, pyodbc
 
 def mat_khau():

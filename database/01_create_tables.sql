@@ -1,8 +1,8 @@
 ﻿/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
-   File   : 02_create_tables.sql
+   File   : 01_create_tables.sql
    Mục đích: Tạo database và bảng ở instance ĐIỀU PHỐI (xóa bản cũ nếu có). Chạy lại được nhiều lần.
-             Database và bảng của 3 node khoa: 02a_create_node.sql (một file dùng chung cho cả 3 node).
+             Database và bảng của 3 node khoa: 02_node_va_linked_server.sql (dựng từ xa qua Linked Server).
    Người viết: ...............          Ngày: ..../11/2026
    Chạy đầu tiên, trên instance điều phối (cổng 14330).
 
@@ -10,7 +10,7 @@
      QLSV_TapTrung  CSDL tập trung gốc: nguồn để phân mảnh và kiểm tra tái thiết
      QLSV_TongHop   node điều phối: danh mục gốc, hồ sơ sinh viên, view toàn cục
      QLSV_CNTT, QLSV_NgoaiNgu, QLSV_DuLich
-                    ở instance này chỉ là vỏ rỗng; 02b_node_links.sql thêm synonym trỏ sang node thật
+                    ở instance này chỉ là vỏ rỗng; 02_node_va_linked_server.sql thêm synonym trỏ sang node thật
 
    THIẾT KẾ TẬP TRUNG (QLSV_TapTrung) – 9 bảng, đạt 3NF:
      Khoa, HocKy, MonHoc, GiangVien, Lop, SinhVien, LopHocPhan, DangKy, NhatKy
@@ -315,7 +315,7 @@ GO
 
 /* =====================================================================
    PHẦN 3. KIỂM TRA – bảng ở 2 database của instance điều phối
-   (bảng của 3 node khoa: 02a_create_tables_node.sql, chạy trên từng instance node)
+   (bảng của 3 node khoa: kiểm tra ở cuối 02_node_va_linked_server.sql)
    ===================================================================== */
 
 USE master;

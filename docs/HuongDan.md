@@ -181,8 +181,8 @@ theo tên như `12_linked_server.png`.
 
 | Dấu hiệu | Nguyên nhân thường gặp |
 | --- | --- |
-| `Could not find server 'LS_QLSV_...'` | Chưa chạy `02b_node_links.sql` |
-| 7416 `no login-mapping exists` | Linked Server có `@provstr`; bỏ chuỗi đó và chạy lại `02b`, rồi `10` |
+| `Could not find server 'LS_QLSV_...'` | Chưa chạy `02_node_va_linked_server.sql` |
+| 7416 `no login-mapping exists` | Linked Server có `@provstr`; bỏ chuỗi đó và chạy lại `02`, rồi `03` đến `10` |
 | `Login failed for user ...` ở node | Chưa chạy `10_security.sql` (login phải có ở cả 4 instance) hoặc sai mật khẩu ánh xạ |
 | 7395 / 1206 | Xem bảng xử lý sự cố ở README |
 | Lỗi khác | Chép nguyên văn dòng đỏ ở Messages |
@@ -197,7 +197,7 @@ Mục đích: có bằng chứng cho yêu cầu kỹ thuật số 12 và demo m�
 
 1. Mở `11_transactions_concurrency.sql`, chạy từ dòng `PHẦN E` đến hết file (chọn đoạn rồi chạy). Các khối blocking và deadlock ở giữa nằm trong comment nên chạy cả file cũng an toàn.
 2. **E1** (bảng thử 300.000 dòng ở tempdb): tự tạo, đo và xóa; không đụng dữ liệu thật.
-3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02a_create_node.sql` thì index mất, chạy lại E2.
+3. **E2**: tạo index thật `IX_DangKy_MaLHP` trên `DangKy(MaLHP)` ở 3 node. Chạy lại `02_node_va_linked_server.sql` thì index mất, chạy lại E2.
 
 ### Kết quả mong đợi (đã đo trên SQL Server Docker)
 

@@ -1,4 +1,4 @@
-﻿/* =====================================================================
+/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
    File   : 15_dong_bo_danh_muc.sql
    Mục đích: (1) TỰ ĐỒNG BỘ danh mục nhân bản (Khoa, HocKy, MonHoc) từ điều phối xuống 3 node, có HÀNG ĐỢI

@@ -5,7 +5,7 @@
              Bước tiếp theo (04_fragmentation.sql) sẽ tách dữ liệu này ra
              các node theo MaKhoa; vì vậy file này CHỈ nạp QLSV_TapTrung.
    Người viết: ...............          Ngày: ..../11/2026
-   Chạy sau : 02_create_tables.sql        Chạy lại nhiều lần được (xóa rồi nạp lại).
+   Chạy sau : 01_create_tables.sql        Chạy lại nhiều lần được (xóa rồi nạp lại).
 
    QUY MÔ: 3 khoa | 5 học kỳ | 34 môn học | 24 giảng viên | 9 lớp
            72 sinh viên (24/khoa) | 45 lớp học phần | 621 lượt đăng ký
