@@ -166,7 +166,7 @@ def bang(df, diem=(), tk=(), phan_tram=(), **kw):
     for c, bm in (("KetQua", O_KET_QUA), ("TrangThai", O_TRANG_THAI), ("HanhDong", O_HANH_DONG)):
         if c in df:
             sty = sty.map(o_nhan(bm), subset=[c])
-    st.dataframe(sty, column_config=cau_hinh, hide_index=True, width="stretch", **kw)
+    return st.dataframe(sty, column_config=cau_hinh, hide_index=True, width="stretch", **kw)
 
 
 def thuc_hien(sql, *tham_so, ok="Thành công"):
@@ -239,91 +239,215 @@ def mau_khoa():
 
 
 def bieu_do_diem(df):
-    """Hai biểu đồ điểm trung bình, trục điểm cố định từ 0 đến 10, có vạch ngưỡng đạt (4)."""
-    truc = alt.Y("DiemTB:Q", title="Điểm trung bình", scale=alt.Scale(domain=[0, 10]),
-                 axis=alt.Axis(values=list(range(11))))
+    """Hai biểu đồ điểm trung bình, trục điểm cố định 0-10, vạch ngưỡng đạt (4). Bấm tên khoa ở chú giải để làm nổi
+    bật khoa đó trên cả hai biểu đồ; rê chuột vào cột hoặc điểm để xem số."""
+    truc = alt.Y("DiemTB:Q", title="Điểm trung bình", scale=alt.Scale(domain=[0, 10]), axis=alt.Axis(values=list(range(0, 11, 2))))
     tip = [alt.Tooltip("TenKhoa:N", title="Khoa"), alt.Tooltip("MaHK:N", title="Học kỳ"),
-           alt.Tooltip("DiemTB:Q", title="Điểm TB", format=".2f")]
-    df = df.dropna(subset=["DiemTB"])          # học kỳ đang học chưa có điểm tổng kết: không vẽ
+           alt.Tooltip("DiemTB:Q", title="Điểm TB", format=".2f"), alt.Tooltip("TyLeDat:Q", title="Tỷ lệ đạt (%)", format=".1f"),
+           alt.Tooltip("SoLuotCoDiem:Q", title="Lượt có điểm"), alt.Tooltip("SoSinhVien:Q", title="Số sinh viên")]
     hk = alt.X("MaHK:N", title=None, sort=sorted(df["MaHK"].unique(), key=thu_tu_hk), axis=alt.Axis(labelAngle=0))
     mau = alt.Color("TenKhoa:N", title=None, scale=mau_khoa(), legend=alt.Legend(orient="bottom"))
+    chon = alt.selection_point(name="chon_khoa", fields=["TenKhoa"], bind="legend")   # bấm chú giải: chọn khoa (Shift: chọn nhiều)
+    re_chuot = alt.selection_point(name="re_chuot", on="pointerover", nearest=True, empty=False, fields=["TenKhoa", "MaHK"])
+    mo = alt.condition(chon, alt.value(1), alt.value(0.15))
     nguong = alt.Chart(pd.DataFrame({"y": [4]})).mark_rule(color="#dc2626", strokeDash=[5, 4]).encode(y="y:Q")
     cot = alt.Chart(df).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
-        x=hk, xOffset="TenKhoa:N", y=truc, color=mau, tooltip=tip)
-    duong = alt.Chart(df).mark_line(point=True, strokeWidth=2.5).encode(x=hk, y=truc, color=mau, tooltip=tip)
-    a, b = st.columns(2)
-    with a.container(border=True):
-        st.markdown("**So sánh các khoa theo học kỳ**")
-        st.altair_chart((cot + nguong).properties(height=300), width="stretch")
-    with b.container(border=True):
-        st.markdown("**Xu hướng qua các học kỳ**")
-        st.altair_chart((duong + nguong).properties(height=300), width="stretch")
-    st.caption("Vạch đỏ nét đứt là ngưỡng đạt (điểm 4). Học kỳ đang học chưa có điểm tổng kết nên không có trên biểu đồ.")
+        x=hk, xOffset="TenKhoa:N", y=truc, color=mau, opacity=mo, tooltip=tip)
+    duong = alt.Chart(df).mark_line(strokeWidth=2.5).encode(x=hk, y=truc, color=mau, opacity=mo)
+    diem = alt.Chart(df).mark_point(filled=True).encode(
+        x=hk, y=truc, color=mau, opacity=mo, tooltip=tip,
+        size=alt.condition(re_chuot, alt.value(220), alt.value(70))).add_params(re_chuot)
+    ve = alt.hconcat((cot + nguong).properties(title="So sánh các khoa theo học kỳ", height=280),
+                     (duong + diem + nguong).properties(title="Xu hướng qua các học kỳ", height=280)
+                     ).add_params(chon).configure_title(anchor="start", fontSize=14).configure_view(stroke=None)
+    with st.container(border=True):
+        st.altair_chart(ve, width="stretch")
+    st.caption(":material/touch_app: Bấm tên khoa ở chú giải để làm nổi bật (bấm chỗ trống để bỏ chọn); rê chuột để xem số. "
+               "Vạch đỏ nét đứt là ngưỡng đạt (điểm 4).")
+
+
+def ban_do_nhiet(df):
+    """Tỷ lệ đạt của từng khoa ở từng học kỳ: ô càng đậm tỷ lệ càng cao, số ghi ngay trong ô."""
+    goc = alt.Chart(df).encode(
+        x=alt.X("MaHK:N", title=None, sort=sorted(df["MaHK"].unique(), key=thu_tu_hk), axis=alt.Axis(labelAngle=0, orient="top")),
+        y=alt.Y("TenKhoa:N", title=None),
+        tooltip=[alt.Tooltip("TenKhoa:N", title="Khoa"), alt.Tooltip("MaHK:N", title="Học kỳ"),
+                 alt.Tooltip("TyLeDat:Q", title="Tỷ lệ đạt (%)", format=".1f"), alt.Tooltip("SoLuotKhongDat:Q", title="Lượt không đạt"),
+                 alt.Tooltip("SoLuotCoDiem:Q", title="Lượt có điểm"), alt.Tooltip("DiemTB:Q", title="Điểm TB", format=".2f")])
+    o = goc.mark_rect(cornerRadius=4, stroke="white", strokeWidth=3).encode(
+        color=alt.Color("TyLeDat:Q", title="Tỷ lệ đạt (%)", scale=alt.Scale(domain=[min(90, float(df["TyLeDat"].min())), 100], scheme="greens"),
+                        legend=None))
+    chu = goc.mark_text(fontSize=13, fontWeight=600).encode(
+        text=alt.Text("TyLeDat:Q", format=".1f"),
+        color=alt.condition(alt.datum.TyLeDat > 97, alt.value("white"), alt.value("#14532d")))
+    with st.container(border=True):
+        st.markdown("**Tỷ lệ đạt (%) theo khoa và học kỳ**")
+        st.altair_chart((o + chu).properties(height=60 + 46 * df["TenKhoa"].nunique()).configure_view(stroke=None), width="stretch")
+
+
+def the_xu_huong(cot, nhan, theo_hk, dinh_dang, tro_giup, to_mau=True):
+    """Thẻ số liệu: giá trị của học kỳ mới nhất có số (ghi rõ học kỳ), chênh lệch so với học kỳ liền trước, đường xu hướng nhỏ.
+    to_mau=False: mũi tên màu xám (tăng giảm số lượng không hẳn tốt hay xấu)."""
+    gt = theo_hk.dropna()
+    if gt.empty:
+        cot.metric(nhan, "-", help=tro_giup, border=True)
+        return
+    lech = None if len(gt) < 2 else round(float(gt.iloc[-1] - gt.iloc[-2]), 2)      # hiệu của hai số đã làm tròn như đang hiển thị
+    if lech is not None and float(lech).is_integer():
+        lech = int(lech)
+    cot.metric(f"{nhan} · {gt.index[-1]}", dinh_dang(gt.iloc[-1]), delta=lech, delta_color="normal" if to_mau else "off",
+               help=tro_giup + (f" Mũi tên: so với {gt.index[-2]}." if lech is not None else ""),
+               border=True, chart_data=[float(v) for v in gt], chart_type="area")
 
 
 def thong_ke():
-    df = xem("SELECT MaKhoa, TenKhoa, MaHK, SoSinhVien, SoLuotDangKy, DiemTB, TyLeDat "
-             "FROM dbo.vw_ThongKe_Khoa_HocKy ORDER BY MaHK, TenKhoa")
+    df = xem("SELECT MaKhoa, TenKhoa, MaHK, SoSinhVien, SoLuotDangKy, SoLuotCoDiem, SoLuotKhongDat, DiemTB, TyLeDat, TongDiem "
+             "FROM dbo.vw_ThongKe_Khoa_HocKy")
     if df is None or df.empty:
         return
-    khoa_xem = df[["MaKhoa", "TenKhoa"]].drop_duplicates()
+    khoa_xem = df[["MaKhoa", "TenKhoa"]].drop_duplicates().sort_values("TenKhoa")
     if len(khoa_xem) == 1:        # giáo vụ: SQL Server chỉ trả khoa của họ
         st.info(f"Bạn chỉ xem được thống kê của khoa {khoa_xem.iloc[0]['TenKhoa']}.")
-    hk_moi = max(df["MaHK"], key=thu_tu_hk)
-    co_diem = df.dropna(subset=["DiemTB"])
-    c = st.columns(4)
-    c[0].metric("Sinh viên", int(df[df["MaHK"] == hk_moi]["SoSinhVien"].sum()), help=f"Số sinh viên có đăng ký ở học kỳ mới nhất ({hk_moi})", border=True)
-    c[1].metric("Tổng lượt đăng ký", f"{int(df['SoLuotDangKy'].sum()):,}".replace(",", "."), help=f"{df['MaHK'].nunique()} học kỳ", border=True)
-    c[2].metric("Điểm trung bình", f"{co_diem['DiemTB'].mean():.2f}" if not co_diem.empty else "-", help="Trung bình các học kỳ đã có điểm", border=True)
-    c[3].metric("Tỷ lệ đạt", f"{co_diem['TyLeDat'].mean():.1f}%" if not co_diem.empty else "-", help="Điểm tổng kết từ 4 trở lên", border=True)
+    else:                         # lọc nhanh theo khoa: mọi thẻ số liệu và biểu đồ bên dưới đổi theo
+        ten = dict(zip(khoa_xem["MaKhoa"], khoa_xem["TenKhoa"]))
+        chon = st.pills("Khoa", list(ten), selection_mode="multi", default=list(ten), format_func=ten.get, key="tk_loc_khoa",
+                        label_visibility="collapsed")
+        if not chon:
+            st.info("Chọn ít nhất một khoa để xem thống kê.")
+            return
+        df = df[df["MaKhoa"].isin(chon)]
+    thu_tu = sorted(df["MaHK"].unique(), key=thu_tu_hk)
 
-    st.subheader("Điểm trung bình theo khoa và học kỳ", anchor=False)
-    bieu_do_diem(df)
-    with st.expander("Xem bảng số liệu"):
+    # Một học kỳ chỉ được tính điểm khi đã có điểm cho ít nhất nửa số lượt đăng ký; học kỳ đang học mới có vài điểm lẻ
+    # sẽ cho điểm trung bình không đại diện.
+    g = df.groupby("MaHK")[["SoSinhVien", "SoLuotDangKy", "SoLuotCoDiem", "SoLuotKhongDat", "TongDiem"]].sum().reindex(thu_tu)
+    da_chot = g.index[g["SoLuotCoDiem"] * 2 >= g["SoLuotDangKy"]].tolist()
+    chua_chot = [h for h in thu_tu if h not in da_chot]
+    co = df[df["MaHK"].isin(da_chot) & df["SoLuotCoDiem"].gt(0)]
+    # Gộp các khoa đang chọn từ TỔNG, không lấy trung bình của các số đã làm tròn: điểm TB = tổng điểm / số lượt có điểm
+    diem_tb = (g["TongDiem"] / g["SoLuotCoDiem"]).reindex(da_chot).round(2)
+    ty_le = (100 * (1 - g["SoLuotKhongDat"] / g["SoLuotCoDiem"])).reindex(da_chot).round(1)
+
+    c = st.columns(4)
+    the_xu_huong(c[0], "Sinh viên", g["SoSinhVien"], lambda v: f"{int(v)}",
+                 "Số sinh viên có đăng ký học phần trong học kỳ.", to_mau=False)
+    the_xu_huong(c[1], "Lượt đăng ký", g["SoLuotDangKy"], lambda v: f"{int(v)}",
+                 f"Cộng cả {len(thu_tu)} học kỳ: {int(g['SoLuotDangKy'].sum())} lượt.", to_mau=False)
+    the_xu_huong(c[2], "Điểm TB", diem_tb, lambda v: f"{v:.2f}",
+                 "Điểm tổng kết trung bình của các lượt đã có điểm.")
+    the_xu_huong(c[3], "Tỷ lệ đạt", ty_le, lambda v: f"{v:.1f}%",
+                 "Số lượt có điểm tổng kết từ 4 trở lên trên số lượt đã có điểm.")
+    if chua_chot:
+        st.caption(f":material/hourglass_top: {', '.join(chua_chot)} đang học: mới có điểm cho "
+                   f"{int(g.loc[chua_chot, 'SoLuotCoDiem'].sum())}/{int(g.loc[chua_chot, 'SoLuotDangKy'].sum())} lượt đăng ký, "
+                   "nên chưa tính vào điểm trung bình, tỷ lệ đạt và các biểu đồ điểm.")
+
+    if co.empty:
+        st.info("Chưa có học kỳ nào đủ điểm để vẽ biểu đồ.")
+    else:
+        st.subheader("Điểm trung bình theo khoa và học kỳ", anchor=False)
+        bieu_do_diem(co)
+        ban_do_nhiet(co)
+    with st.expander("Xem bảng số liệu (mọi học kỳ)"):
         bang(df.drop(columns="MaKhoa").sort_values(["MaHK", "TenKhoa"], key=lambda c: c.map(thu_tu_hk) if c.name == "MaHK" else c),
              diem=["DiemTB"], phan_tram=["TyLeDat"])
 
-    st.subheader("Phân bố học lực")
-    a, b = st.columns(2)
-    if len(khoa_xem) == 1:
-        khoa = khoa_xem.iloc[0]["MaKhoa"]
-        a.selectbox("Khoa", [khoa], format_func=KHOA.get, disabled=True, key="tk_khoa_co_dinh")
-    else:
-        khoa = a.selectbox("Khoa", [None] + khoa_xem["MaKhoa"].tolist(), format_func=KHOA.get, key="tk_khoa")
-    hk = b.selectbox("Học kỳ", [None] + sorted(df["MaHK"].unique(), key=thu_tu_hk, reverse=True),
-                     format_func=lambda h: "Tất cả học kỳ" if h is None else h)
-    ph = xem("EXEC dbo.sp_ThongKeKhoa @MaKhoa = ?, @MaHK = ?", khoa, hk)
-    if ph is not None and not ph.empty:
-        dai = ph.melt(id_vars="TenKhoa", value_vars=list(HOC_LUC_COT), var_name="HocLuc", value_name="SoLuot")
-        dai["HocLuc"] = dai["HocLuc"].map(HOC_LUC_COT)
-        with st.container(border=True):
-            st.altair_chart(alt.Chart(dai).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
-                x=alt.X("TenKhoa:N", title=None, axis=alt.Axis(labelAngle=0)), xOffset=alt.XOffset("HocLuc:N", sort=list(HOC_LUC)),
-                y=alt.Y("SoLuot:Q", title="Số lượt có điểm"),
-                color=alt.Color("HocLuc:N", title=None, sort=list(HOC_LUC), legend=alt.Legend(orient="bottom"),
-                                scale=alt.Scale(domain=list(HOC_LUC), range=[c[0] for c in HOC_LUC.values()])),
-                tooltip=[alt.Tooltip("TenKhoa", title="Khoa"), alt.Tooltip("HocLuc", title="Học lực"),
-                         alt.Tooltip("SoLuot", title="Số lượt")]).properties(height=300), width="stretch")
-        bang(ph, diem=["DiemTB"])
+    st.subheader("Phân bố học lực", anchor=False)
+    hk = st.pills("Học kỳ", ["Tất cả"] + list(reversed(da_chot)), default="Tất cả", key="tk_hk") or "Tất cả"
+    ph = xem("EXEC dbo.sp_ThongKeKhoa @MaKhoa = NULL, @MaHK = ?", None if hk == "Tất cả" else hk)
+    if ph is not None:
+        ph = ph[ph["TenKhoa"].isin(df["TenKhoa"])]              # theo các khoa đang chọn ở đầu trang
+    if ph is None or ph.empty or ph["SoLuotCoDiem"].sum() == 0:
+        st.info("Chưa có điểm trong phạm vi đã chọn.")
+        return
+    dai = ph.melt(id_vars=["TenKhoa", "SoLuotCoDiem"], value_vars=list(HOC_LUC_COT), var_name="HocLuc", value_name="SoLuot")
+    dai["HocLuc"] = dai["HocLuc"].map(HOC_LUC_COT)
+    dai["TyLe"] = dai["SoLuot"] / dai["SoLuotCoDiem"]
+    dai["ThuTu"] = dai["HocLuc"].map({h: i for i, h in enumerate(HOC_LUC)})
+    chon_hl = alt.selection_point(name="chon_hoc_luc", fields=["HocLuc"], bind="legend")
+    thanh = alt.Chart(dai).mark_bar(cornerRadius=3, stroke="white", strokeWidth=1.5).encode(
+        y=alt.Y("TenKhoa:N", title=None),
+        x=alt.X("SoLuot:Q", stack="normalize", title="Tỷ lệ trên số lượt có điểm", axis=alt.Axis(format="%")),
+        color=alt.Color("HocLuc:N", title=None, sort=list(HOC_LUC), legend=alt.Legend(orient="bottom"),
+                        scale=alt.Scale(domain=list(HOC_LUC), range=[c[0] for c in HOC_LUC.values()])),
+        order=alt.Order("ThuTu:Q"), opacity=alt.condition(chon_hl, alt.value(1), alt.value(0.2)),
+        tooltip=[alt.Tooltip("TenKhoa", title="Khoa"), alt.Tooltip("HocLuc", title="Học lực"),
+                 alt.Tooltip("SoLuot", title="Số lượt"), alt.Tooltip("TyLe", title="Tỷ lệ", format=".1%")]).add_params(chon_hl)
+    with st.container(border=True):
+        st.altair_chart(thanh.properties(height=70 + 44 * len(ph)).configure_view(stroke=None), width="stretch")
+    st.caption("Giỏi ≥ 8 · Khá ≥ 6,5 · Trung bình ≥ 5 · Yếu ≥ 4 · Không đạt < 4. Bấm một mức ở chú giải để làm nổi bật.")
+    bang(ph, diem=["DiemTB"])
 
 
-def tim_kiem():
-    with st.form("tim_kiem"):
-        tu_khoa = st.text_input("Mã sinh viên hoặc họ tên", placeholder="ví dụ: nguyen, 2401 (không cần gõ dấu)")
-        a, b, c = st.columns(3)
-        ds_khoa = khoa_duoc_xem()
-        khoa = a.selectbox("Khoa", [None] + ds_khoa if len(ds_khoa) > 1 else ds_khoa, format_func=KHOA.get)
-        lop = b.text_input("Mã lớp", placeholder="ví dụ 66.CNTT-1")
-        tt = c.selectbox("Trạng thái", [None] + TRANG_THAI, format_func=lambda t: "Tất cả" if t is None else t)
-        gui = st.form_submit_button("Tìm", type="primary", icon=":material/search:")
-    if gui:
-        df = xem("EXEC dbo.sp_TimSinhVien @TuKhoa = ?, @MaKhoa = ?, @MaLop = ?, @TrangThai = ?",
-                 tu_khoa or None, khoa, lop or None, tt)
-        if df is not None and df.empty:
-            st.info("Không tìm thấy sinh viên nào khớp điều kiện. Thử bỏ bớt điều kiện lọc.")
-        elif df is not None:
-            st.caption(f"Tìm thấy **{len(df)}** sinh viên")
-            bang(df)
+def bieu_do_bang_diem(df):
+    """Điểm tổng kết từng môn của một sinh viên, xếp theo học kỳ, tô màu theo học lực; rê chuột để xem chi tiết."""
+    d = df.dropna(subset=["DiemTK"]).copy()
+    if d.empty:
+        return
+    d["HocLuc"] = d["DiemTK"].map(muc_hoc_luc)
+    d = d.sort_values("MaHK", key=lambda c: c.map(thu_tu_hk))
+    cot = alt.Chart(d).mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3).encode(
+        x=alt.X("TenMH:N", title=None, sort=d["TenMH"].tolist(), axis=alt.Axis(labelAngle=-35, labelLimit=140)),
+        y=alt.Y("DiemTK:Q", title="Điểm tổng kết", scale=alt.Scale(domain=[0, 10])),
+        color=alt.Color("HocLuc:N", title=None, sort=list(HOC_LUC), legend=alt.Legend(orient="bottom"),
+                        scale=alt.Scale(domain=list(HOC_LUC), range=[c[0] for c in HOC_LUC.values()])),
+        tooltip=[alt.Tooltip("TenMH", title="Môn"), alt.Tooltip("MaHK", title="Học kỳ"),
+                 alt.Tooltip("DiemQT", title="Quá trình", format=".1f"), alt.Tooltip("DiemThi", title="Thi", format=".1f"),
+                 alt.Tooltip("DiemTK", title="Tổng kết", format=".2f"), alt.Tooltip("HocLuc", title="Xếp loại")])
+    nguong = alt.Chart(pd.DataFrame({"y": [4]})).mark_rule(color="#dc2626", strokeDash=[5, 4]).encode(y="y:Q")
+    st.altair_chart((cot + nguong).properties(height=280), width="stretch")
+
+
+def the_sinh_vien(sv):
+    """Thẻ chi tiết một sinh viên (dict một dòng của vw_SinhVien_ToanCuc): thông tin, số liệu tích lũy, biểu đồ điểm."""
+    with st.container(border=True):
+        a, b = st.columns([3, 2], vertical_alignment="center")
+        a.markdown(f"#### {sv['HoTen']}")
+        a.caption(f"`{sv['MaSV']}` · lớp {sv['MaLop']} · sinh ngày {sv['NgaySinh']} · {sv['GioiTinh']}")
+        with b.container(horizontal=True, horizontal_alignment="right"):
+            st.badge(sv["TenKhoa"], color=HUY_HIEU_KHOA.get(
+                {"Công nghệ thông tin": "CNTT", "Ngoại ngữ": "NN", "Du lịch": "DL"}.get(sv["TenKhoa"]), "gray"))
+            st.badge(sv["TrangThai"], color={"Đang học": "green", "Bảo lưu": "orange", "Thôi học": "red"}.get(sv["TrangThai"], "blue"))
+        try:
+            diem, tong = chay("EXEC dbo.sp_BangDiemSinhVien @MaSV = ?", sv["MaSV"])
+        except pyodbc.Error as e:
+            st.error(loi(e))
+            return
+        t = tong.iloc[0]
+        m = st.columns(3)
+        m[0].metric("Điểm TB tích lũy", "-" if pd.isna(t["DiemTBTichLuy"]) else f"{t['DiemTBTichLuy']:.2f}")
+        m[1].metric("Tín chỉ tích lũy", int(t["TinChiTichLuy"] or 0))
+        m[2].metric("Số môn có điểm", int(t["SoMonCoDiem"]))
+        if diem.empty:
+            st.info("Sinh viên chưa đăng ký lớp học phần nào.")
+        else:
+            bieu_do_bang_diem(diem)
+            with st.expander("Bảng điểm chi tiết"):
+                bang(diem, diem=["DiemQT", "DiemThi"], tk=["DiemTK"])
+
+
+def tim_kiem(k="tk"):
+    """Lọc ngay khi gõ hoặc đổi bộ lọc (không cần bấm nút); bấm một dòng để mở thẻ chi tiết sinh viên."""
+    tu_khoa = st.text_input("Mã sinh viên hoặc họ tên", placeholder="Gõ rồi Enter, ví dụ: nguyen, 2401 (không cần gõ dấu)",
+                            icon=":material/search:", key=f"{k}_tu_khoa")
+    a, b, c = st.columns(3)
+    ds_khoa = khoa_duoc_xem()
+    khoa = a.selectbox("Khoa", [None] + ds_khoa if len(ds_khoa) > 1 else ds_khoa, format_func=KHOA.get, key=f"{k}_khoa")
+    ds_lop = danh_sach("SELECT DISTINCT MaLop FROM dbo.vw_SinhVien_ToanCuc WHERE (? IS NULL OR MaKhoa = ?) ORDER BY MaLop", "MaLop", khoa, khoa)
+    lop = b.selectbox("Lớp", [None] + ds_lop, format_func=lambda l: "Tất cả lớp" if l is None else l, key=f"{k}_lop")
+    tt = c.selectbox("Trạng thái", [None] + TRANG_THAI, format_func=lambda t: "Tất cả" if t is None else t, key=f"{k}_tt")
+    df = xem("EXEC dbo.sp_TimSinhVien @TuKhoa = ?, @MaKhoa = ?, @MaLop = ?, @TrangThai = ?", tu_khoa or None, khoa, lop, tt)
+    if df is None:
+        return
+    if df.empty:
+        st.info("Không tìm thấy sinh viên nào khớp điều kiện. Thử bỏ bớt điều kiện lọc.", icon=":material/search_off:")
+        return
+    st.caption(f"**{len(df)}** sinh viên" + (" (tối đa 100)" if len(df) == 100 else "")
+               + " · :material/touch_app: bấm vào một dòng để xem chi tiết")
+    chon = bang(df, on_select="rerun", selection_mode="single-row", key=f"{k}_bang", height=min(38 * len(df) + 40, 390))
+    dong = chon.selection.rows if chon is not None else []
+    if dong and dong[0] < len(df):
+        the_sinh_vien(df.iloc[dong[0]].to_dict())
 
 
 def trang_tim_kiem():
@@ -351,6 +475,8 @@ def bang_diem():
                 if kq[0].empty:
                     st.info("Sinh viên chưa đăng ký lớp học phần nào trong phạm vi đã chọn.")
                 else:
+                    with st.container(border=True):
+                        bieu_do_bang_diem(kq[0])
                     bang(kq[0], diem=["DiemQT", "DiemThi"], tk=["DiemTK"])
     with t2:
         lop = st.selectbox("Lớp", danh_sach("SELECT DISTINCT MaLop FROM dbo.vw_SinhVien_ToanCuc ORDER BY 1", "MaLop"))
@@ -456,7 +582,7 @@ def sinh_vien():
     t = st.tabs([":material/list: Danh sách", ":material/person_add: Thêm", ":material/edit: Sửa",
                  ":material/delete: Xóa", ":material/swap_horiz: Chuyển khoa"])
     with t[0]:
-        tim_kiem()
+        tim_kiem("sv")
     with t[1]:
         lop_ds = danh_sach("SELECT DISTINCT MaLop FROM dbo.vw_SinhVien_ToanCuc ORDER BY 1", "MaLop")
         with st.form("them_sv"):

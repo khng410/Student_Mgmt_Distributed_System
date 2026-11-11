@@ -129,7 +129,8 @@ SELECT MaKhoa, TenKhoa, MaHK,
        CAST(AVG(DiemTK) AS DECIMAL(4,2)) AS DiemTB,
        SUM(CASE WHEN DiemTK < 4 THEN 1 ELSE 0 END) AS SoLuotKhongDat,
        CAST(100.0 * SUM(CASE WHEN DiemTK >= 4 THEN 1 ELSE 0 END)
-            / NULLIF(COUNT(DiemTK), 0) AS DECIMAL(5,2)) AS TyLeDat
+            / NULLIF(COUNT(DiemTK), 0) AS DECIMAL(5,2)) AS TyLeDat,
+       SUM(DiemTK)           AS TongDiem      -- để gộp nhiều khoa cho đúng: điểm TB = SUM(TongDiem) / SUM(SoLuotCoDiem)
 FROM dbo.vw_BangDiem
 GROUP BY MaKhoa, TenKhoa, MaHK;
 GO
