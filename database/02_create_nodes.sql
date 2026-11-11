@@ -1,6 +1,6 @@
 ﻿/* =====================================================================
    ĐỒ ÁN CSDL PHÂN TÁN – QUẢN LÝ SINH VIÊN NHIỀU KHOA
-   File   : 02_create_nodes.sql
+   File   : 02_node_va_linked_server.sql
    Mục đích: Nối instance điều phối với 3 instance node bằng Linked Server, dựng database và bảng ở cả 3 node
              TỪ XA, rồi tạo database đại diện (synonym) để các file sau dùng tên 3 phần như cũ.
    Người viết: ...............          Ngày: ..../11/2026
@@ -13,14 +13,15 @@
    Khoa Ngoại ngữ       qlsv_ngoaingu          QLSV_NgoaiNgu   MaKhoa = 'NN'
    Khoa Du lịch         qlsv_dulich            QLSV_DuLich     MaKhoa = 'DL'
 
-   CÁCH HOẠT ĐỘNG (mỗi node lần lượt qua 4 bước, trong một vòng lặp)
-   1. Tạo Linked Server LS_<tên database>. Người chạy file đi sang node bằng CHÍNH login của mình (@useself = TRUE):
-      4 instance dùng chung mật khẩu sa (file .env) nên không ghi mật khẩu vào file; 10_security.sql thêm ánh xạ cho
-      từng lg_*. KHÔNG dùng @locallogin = NULL vì sẽ cho mọi login đi bằng một tài khoản.
-   2. Xóa và tạo lại database ở node, từ xa.
-   3. Tạo 9 bảng: ba node giống hệt nhau, chỉ khác mã khoa nên DDL viết MỘT lần ({K} = mã khoa).
-   4. Ở điều phối, QLSV_CNTT / QLSV_NgoaiNgu / QLSV_DuLich (vỏ rỗng do 01 tạo) chứa SYNONYM trỏ về bảng thật:
-      QLSV_CNTT.dbo.SinhVien thực chất là truy vấn liên instance.
+   CÁCH HOẠT ĐỘNG
+   * PHẦN 1. LS_QLSV_CNTT / LS_QLSV_NgoaiNgu / LS_QLSV_DuLich (tên = 'LS_' + tên database). Người chạy file được
+     ánh xạ sang node bằng CHÍNH login và mật khẩu của mình (@useself = TRUE): 4 instance dùng chung mật khẩu sa
+     (file .env) nên không phải ghi mật khẩu vào file. 10_security.sql thêm ánh xạ cho từng tài khoản lg_*.
+     KHÔNG dùng @locallogin = NULL vì sẽ cho mọi login đi bằng một tài khoản.
+   * PHẦN 2. Ba node có cấu trúc giống hệt nhau, chỉ khác tên database và mã khoa, nên DDL viết MỘT lần dưới dạng
+     khuôn ({K} = mã khoa) rồi gửi sang từng node qua <LinkedServer>.<db>.sys.sp_executesql.
+   * PHẦN 3. Trên instance điều phối, QLSV_CNTT / QLSV_NgoaiNgu / QLSV_DuLich (tạo ở 02) chỉ là vỏ rỗng chứa
+     SYNONYM trỏ về bảng thật ở node: QLSV_CNTT.dbo.SinhVien thực chất là truy vấn liên instance.
    ===================================================================== */
 
 SET NOCOUNT ON;
@@ -29,8 +30,44 @@ GO
 USE master;
 GO
 
+/* =====================================================================
+   PHẦN 1. LINKED SERVER TỚI 3 NODE
+   ===================================================================== */
+DECLARE @nguoiChay SYSNAME = SUSER_SNAME(), @db SYSNAME, @host SYSNAME, @ls SYSNAME;
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+    SELECT db, host FROM (VALUES (N'QLSV_CNTT',     N'qlsv_cntt'),
+                                 (N'QLSV_NgoaiNgu', N'qlsv_ngoaingu'),
+                                 (N'QLSV_DuLich',   N'qlsv_dulich')) n(db, host);
+OPEN c;
+FETCH NEXT FROM c INTO @db, @host;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @ls = N'LS_' + @db;
+    IF EXISTS (SELECT 1 FROM sys.servers WHERE name = @ls)
+        EXEC sp_dropserver @server = @ls, @droplogins = 'droplogins';
+
+    EXEC sp_addlinkedserver @server = @ls, @srvproduct = N'', @provider = N'MSOLEDBSQL',
+         @datasrc = @host;            
+    EXEC sp_serveroption @ls, N'rpc out', N'true';                              
+    EXEC sp_serveroption @ls, N'remote proc transaction promotion', N'true';    
+    EXEC sp_serveroption @ls, N'collation compatible', N'true';                 
+    EXEC sp_addlinkedsrvlogin @rmtsrvname = @ls, @useself = N'TRUE', @locallogin = @nguoiChay; 
+    EXEC sp_testlinkedserver @ls;
+    PRINT N'Linked Server ' + @ls + N' -> ' + @host + N' OK';
+    FETCH NEXT FROM c INTO @db, @host;
+END
+CLOSE c;
+DEALLOCATE c;
+GO
+
+
+/* =====================================================================
+   PHẦN 2. DATABASE VÀ BẢNG Ở 3 NODE (chạy từ xa)
+   Khuôn DDL của một node: {K} được thay bằng mã khoa. Dấu nháy trong khuôn viết đôi ('') vì nằm trong chuỗi.
+   ===================================================================== */
 DECLARE @ddl NVARCHAR(MAX) = N'
 -- Bản sao danh mục (nhân bản từ QLSV_TongHop)
+
 CREATE TABLE dbo.Khoa (
     MaKhoa       VARCHAR(10)    NOT NULL,
     TenKhoa      NVARCHAR(100)  NOT NULL,
@@ -117,6 +154,7 @@ CREATE TABLE dbo.SinhVien (
     CONSTRAINT FK_SinhVien_Lop      FOREIGN KEY (MaLop) REFERENCES dbo.Lop (MaLop)
 );
 -- Phân mảnh ngang dẫn xuất: FK tới GiangVien cục bộ -> lớp học phần do khoa này mở.
+
 CREATE TABLE dbo.LopHocPhan (
     MaLHP        VARCHAR(20)    NOT NULL,   -- vd: CNTT101-HK1-2526-01
     MaMH         VARCHAR(10)    NOT NULL,
@@ -134,6 +172,7 @@ CREATE TABLE dbo.LopHocPhan (
     CONSTRAINT FK_LopHocPhan_GiangVien FOREIGN KEY (MaGV) REFERENCES dbo.GiangVien (MaGV)
 );
 -- Phân mảnh ngang dẫn xuất: FK tới SinhVien cục bộ -> đăng ký của sinh viên khoa này.
+
 -- Điểm tổng kết = 40% quá trình + 60% thi, làm tròn 1 chữ số (cột tính toán).
 CREATE TABLE dbo.DangKy (
     MaSV         CHAR(8)        NOT NULL,
@@ -163,59 +202,85 @@ CREATE TABLE dbo.NhatKy (
 );
 ';
 
-DECLARE @nguoiChay SYSNAME = SUSER_SNAME();
-DECLARE @bang NVARCHAR(MAX) = N'Khoa,HocKy,MonHoc,GiangVien,Lop,SinhVien,LopHocPhan,DangKy,NhatKy';
-DECLARE @db SYSNAME, @host SYSNAME, @k VARCHAR(10), @ls SYSNAME, @exec NVARCHAR(300), @sql NVARCHAR(MAX);
+DECLARE @db SYSNAME, @k VARCHAR(10), @ls SYSNAME, @exec NVARCHAR(300), @sql NVARCHAR(MAX);
 DECLARE c CURSOR LOCAL FAST_FORWARD FOR
-    SELECT db, host, k FROM (VALUES (N'QLSV_CNTT',     N'qlsv_cntt',     'CNTT'),
-                                    (N'QLSV_NgoaiNgu', N'qlsv_ngoaingu', 'NN'),
-                                    (N'QLSV_DuLich',   N'qlsv_dulich',   'DL')) n(db, host, k);
+    SELECT db, k FROM (VALUES (N'QLSV_CNTT', 'CNTT'), (N'QLSV_NgoaiNgu', 'NN'), (N'QLSV_DuLich', 'DL')) n(db, k);
 OPEN c;
-FETCH NEXT FROM c INTO @db, @host, @k;
+FETCH NEXT FROM c INTO @db, @k;
 WHILE @@FETCH_STATUS = 0
 BEGIN
     SET @ls = N'LS_' + @db;
-
-    -- 1. Linked Server
-    IF EXISTS (SELECT 1 FROM sys.servers WHERE name = @ls)
-        EXEC sp_dropserver @server = @ls, @droplogins = 'droplogins';
-    EXEC sp_addlinkedserver @server = @ls, @srvproduct = N'', @provider = N'MSOLEDBSQL',
-         @datasrc = @host;            -- KHÔNG đặt @provstr: có chuỗi này thì login không phải sysadmin bị lỗi 7416
-    EXEC sp_serveroption @ls, N'rpc out', N'true';                              -- gọi thủ tục / SQL động ở node
-    EXEC sp_serveroption @ls, N'remote proc transaction promotion', N'true';    -- giao dịch phân tán (MSDTC)
-    EXEC sp_serveroption @ls, N'collation compatible', N'true';                 -- cùng Vietnamese_CI_AS: đẩy lọc sang node
-    EXEC sp_addlinkedsrvlogin @rmtsrvname = @ls, @useself = N'TRUE', @locallogin = @nguoiChay;
-    EXEC sp_testlinkedserver @ls;
-
-    -- 2. Database ở node (xóa cái cũ, ngắt kết nối đang mở trước)
+    -- (a) xóa database cũ của node (ngắt kết nối đang mở trước), tạo mới
     SET @exec = @ls + N'.master.sys.sp_executesql';
-    SET @sql = N'IF DB_ID(N''' + @db + N''') IS NOT NULL ALTER DATABASE ' + QUOTENAME(@db)
-             + N' SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE IF EXISTS ' + QUOTENAME(@db)
-             + N'; CREATE DATABASE ' + QUOTENAME(@db) + N' COLLATE Vietnamese_CI_AS;';
+    SET @sql = N'IF DB_ID(N''' + @db + N''') IS NOT NULL
+                 BEGIN
+                     ALTER DATABASE ' + QUOTENAME(@db) + N' SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                     DROP DATABASE ' + QUOTENAME(@db) + N';
+                 END';
     EXEC @exec @sql;
-
-    -- 3. Bảng (QUOTED_IDENTIFIER / ANSI_NULLS bắt buộc cho cột tính toán PERSISTED)
+    SET @sql = N'CREATE DATABASE ' + QUOTENAME(@db) + N' COLLATE Vietnamese_CI_AS;';
+    EXEC @exec @sql;
+    -- (b) tạo 9 bảng trong database vừa tạo (chạy trong ngữ cảnh database đó)
     SET @exec = @ls + N'.' + QUOTENAME(@db) + N'.sys.sp_executesql';
-    SET @sql = N'SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON;' + REPLACE(@ddl, N'{K}', @k);
+    SET @sql = N'SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON;' + REPLACE(@ddl, N'{K}', @k);   -- bắt buộc cho cột tính toán PERSISTED
     EXEC @exec @sql;
-
-    -- 4. Synonym ở điều phối
-    SELECT @sql = STRING_AGG(CONVERT(NVARCHAR(MAX), N'DROP SYNONYM IF EXISTS dbo.' + value + N'; CREATE SYNONYM dbo.' + value
-                 + N' FOR ' + @ls + N'.' + @db + N'.dbo.' + value + N';'), N' ')
-    FROM STRING_SPLIT(@bang, N',');
-    SET @exec = QUOTENAME(@db) + N'.sys.sp_executesql';
-    EXEC @exec @sql;
-
     PRINT N'Đã dựng ' + @db + N' ở node ' + @ls + N' (MaKhoa = ' + @k + N')';
-    FETCH NEXT FROM c INTO @db, @host, @k;
+    FETCH NEXT FROM c INTO @db, @k;
 END
 CLOSE c;
 DEALLOCATE c;
 GO
 
 
-/* KIỂM TRA: mỗi node có 9 bảng và đọc được qua synonym từ điều phối (bảng còn rỗng, dữ liệu nạp ở 03, 04) */
-SELECT N'CNTT' AS Node, (SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.sys.tables) AS SoBang, COUNT(*) AS SoSinhVien FROM QLSV_CNTT.dbo.SinhVien
-UNION ALL SELECT N'NN', (SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.tables), COUNT(*) FROM QLSV_NgoaiNgu.dbo.SinhVien
-UNION ALL SELECT N'DL', (SELECT COUNT(*) FROM LS_QLSV_DuLich.QLSV_DuLich.sys.tables), COUNT(*) FROM QLSV_DuLich.dbo.SinhVien;
+/* =====================================================================
+   PHẦN 3. DATABASE ĐẠI DIỆN: mỗi bảng của node là một synonym tới bảng thật ở instance node
+   ===================================================================== */
+DECLARE @t TABLE (ten SYSNAME);
+INSERT @t VALUES (N'Khoa'), (N'HocKy'), (N'MonHoc'), (N'GiangVien'), (N'Lop'), (N'SinhVien'),
+                 (N'LopHocPhan'), (N'DangKy'), (N'NhatKy');
+DECLARE @db SYSNAME, @sql NVARCHAR(MAX), @exec NVARCHAR(300);
+DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+    SELECT db FROM (VALUES (N'QLSV_CNTT'), (N'QLSV_NgoaiNgu'), (N'QLSV_DuLich')) n(db);
+OPEN c;
+FETCH NEXT FROM c INTO @db;
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @sql = N'';
+    SELECT @sql += N'DROP SYNONYM IF EXISTS dbo.' + ten + N'; CREATE SYNONYM dbo.' + ten
+                 + N' FOR LS_' + @db + N'.' + @db + N'.dbo.' + ten + N'; '
+    FROM @t;
+    SET @exec = QUOTENAME(@db) + N'.sys.sp_executesql';
+    EXEC @exec @sql;
+    FETCH NEXT FROM c INTO @db;
+END
+CLOSE c;
+DEALLOCATE c;
+GO
+
+
+/* =====================================================================
+   PHẦN 4. KIỂM TRA
+   ===================================================================== */
+-- Mỗi node có đủ 9 bảng; số ràng buộc CHECK và khóa ngoại đọc thẳng từ catalog của node
+SELECT N'QLSV_CNTT' AS Node, t.name AS TenBang,
+       (SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.sys.check_constraints c WHERE c.parent_object_id = t.object_id) AS SoCHECK,
+       (SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.sys.foreign_keys f WHERE f.parent_object_id = t.object_id) AS SoFK
+FROM LS_QLSV_CNTT.QLSV_CNTT.sys.tables t
+UNION ALL
+SELECT N'QLSV_NgoaiNgu', t.name,
+       (SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.check_constraints c WHERE c.parent_object_id = t.object_id),
+       (SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.foreign_keys f WHERE f.parent_object_id = t.object_id)
+FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.sys.tables t
+UNION ALL
+SELECT N'QLSV_DuLich', t.name,
+       (SELECT COUNT(*) FROM LS_QLSV_DuLich.QLSV_DuLich.sys.check_constraints c WHERE c.parent_object_id = t.object_id),
+       (SELECT COUNT(*) FROM LS_QLSV_DuLich.QLSV_DuLich.sys.foreign_keys f WHERE f.parent_object_id = t.object_id)
+FROM LS_QLSV_DuLich.QLSV_DuLich.sys.tables t
+ORDER BY Node, TenBang;
+GO
+
+-- Đi qua synonym tới đủ 3 node (bảng còn rỗng vì chưa nạp dữ liệu ở 03, 04)
+SELECT N'CNTT' AS Node, COUNT(*) AS SoSinhVien FROM QLSV_CNTT.dbo.SinhVien
+UNION ALL SELECT N'NN', COUNT(*) FROM QLSV_NgoaiNgu.dbo.SinhVien
+UNION ALL SELECT N'DL', COUNT(*) FROM QLSV_DuLich.dbo.SinhVien;
 GO
