@@ -14,7 +14,7 @@ Thời lượng gợi ý: **20 phút trình bày + demo**, sau đó hỏi đáp.
 ```
 docker compose up -d                  # đợi docker compose ps: 4 container (healthy), khoảng 1 phút
 python3 -I scripts/trien_khai.py      # dữ liệu về đúng dữ liệu mẫu, cuối cùng in "XONG"
-python3 -I scripts/kiem_tra_demo.py   # phải in "Tất cả đều đúng."
+python3 -I scripts/kiem_tra_demo.py   # phải in "Tất cả đều đúng." (61 điểm)
 cd app && bash chay.sh                # ứng dụng ở http://localhost:8501
 ```
 
@@ -25,7 +25,7 @@ cd app && bash chay.sh                # ứng dụng ở http://localhost:8501
 | Trình duyệt tab 1 | `images/kien_truc_phan_tan.svg` (sơ đồ kiến trúc) |
 | Trình duyệt tab 2 | Ứng dụng `http://localhost:8501`, chưa đăng nhập |
 | Docker Desktop | Trang Containers (4 container `qlsv_*` màu xanh) |
-| SQLPro / SSMS | 5 kết nối tới `localhost,14330`, database `QLSV_TongHop`: `sa`, `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh` |
+| SQLPro / SSMS | Kết nối `sa` tới `localhost,14330`, database `QLSV_TongHop`. Bốn kết nối `lg_*` chỉ cần nếu muốn dự phòng cho phần phân quyền |
 | SQLPro, kết nối `sa` | Mở sẵn các file `12_linked_server.sql`, `11_transactions_concurrency.sql`, `13_dong_bo_kiem_thu.sql`, `14_demo_vai_tro.sql` |
 | Terminal | Ở thư mục gốc dự án |
 
@@ -152,27 +152,47 @@ cửa sổ 1 chạy phần **D**.
 
 ---
 
-## 7. Đồng bộ và khi một node mất kết nối (3 phút)
+## 7. Đồng bộ và khi một node mất kết nối (4 phút)
 
-**Làm:** `13_dong_bo_kiem_thu.sql` **kịch bản 5** (sửa danh mục ở trung tâm).
-
-**Thấy:** sau UPDATE ở điều phối, 3 bản sao **chưa đổi**; sau `sp_DongBoDanhMuc`, cả 4 nơi giống nhau; ROLLBACK về như cũ.
+Làm ngay trên ứng dụng, đăng nhập **Quản trị**, trang **Phân tán**.
 
 **Nói:** dữ liệu phân mảnh mỗi dòng chỉ có một bản nên không cần đồng bộ; thêm, sửa, xóa, chuyển khoa sinh viên ghi cả hai mảnh
-dọc trong một giao dịch (kịch bản 1–4). Chỉ danh mục nhân bản cần đồng bộ, làm bằng `sp_DongBoDanhMuc`.
+dọc trong một giao dịch. Chỉ danh mục nhân bản (Khoa, Học kỳ, Môn học) cần đồng bộ. Mỗi thay đổi ở bản chính được trigger xếp
+vào **hàng đợi**, mỗi node một mục; xử lý hàng đợi chép xuống từng node riêng rẽ.
 
-**Làm (nếu còn thời gian, khoảng 2 phút):** terminal `python3 -I scripts/thu_mat_ket_noi.py`.
+**Làm:** mục **Đồng bộ danh mục** → bấm **1. Sửa thẳng tên ở bản chính**.
 
-**Thấy:** dừng node Du lịch: đọc node còn sống vẫn được; view toàn cục, thêm sinh viên, giao dịch chạm node vắng **lỗi và bị hủy,
-không ghi dở**; bật lại node, đồng bộ lại, bản sao khớp (`0` dòng lệch), view trả lại 72 sinh viên.
+**Thấy:** bảng 4 nơi lưu: 3 bản sao **❌ lệch (bản cũ)**; hàng đợi có **3 mục** (CNTT, DL, NN).
 
-**Nói (nếu không chạy):** bảng "Khi một node mất kết nối" trong README tóm tắt kết quả đã đo.
+**Làm:** bấm **2. Xử lý hàng đợi**.
+
+**Thấy:** 3 bản sao **✅ khớp**, hàng đợi rỗng.
+
+**Làm (mất kết nối):** Docker Desktop → dừng container `qlsv_dulich` → mục **Trạng thái node** → **Kiểm tra lại**.
+
+**Thấy:** `3/4 instance đang hoạt động`; thẻ Du lịch đỏ sau khoảng 10 giây, ba thẻ còn lại xanh.
+
+**Làm:** quay lại **Đồng bộ danh mục** → **Bỏ sửa ở bản chính** → **2. Xử lý hàng đợi**.
+
+**Thấy:** CNTT và Ngoại ngữ ✅ khớp; Du lịch **⚠️ không kết nối được**; hàng đợi còn **1 mục** của node Du lịch, có số lần thử và lỗi.
+
+**Nói:** node vắng không cản hai node còn lại; thay đổi của nó được giữ trong hàng đợi, không mất. Trong lúc này vẫn thêm được
+sinh viên cho khoa CNTT và Ngoại ngữ (thủ tục chỉ cần node của khoa đó và điều phối); thêm vào khoa Du lịch thì báo lỗi, không ghi dở.
+
+**Làm:** Docker Desktop → chạy lại `qlsv_dulich`, đợi `(healthy)` → **2. Xử lý hàng đợi**.
+
+**Thấy:** Du lịch ✅ khớp, hàng đợi rỗng. Mục Trạng thái node về `4/4`.
+
+**Nói thêm (nếu được hỏi):** trang **Danh mục** sửa môn học, học kỳ qua thủ tục `dm_LuuMonHoc`, `dm_LuuHocKy` nên tự xử lý hàng đợi
+ngay sau khi lưu. Phương án dự phòng không dùng giao diện: `13_dong_bo_kiem_thu.sql` kịch bản 5, `15_dong_bo_danh_muc.sql` phần ví dụ,
+hoặc `python3 -I scripts/thu_mat_ket_noi.py`.
 
 ---
 
 ## 8. Phân quyền (2 phút)
 
-**Làm:** chạy `14_demo_vai_tro.sql` ở 4 kết nối `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh`; xếp 4 bảng cạnh nhau.
+**Làm:** ứng dụng, đăng nhập **Quản trị** → trang **Phân quyền** → **Thử 8 việc với 5 vai trò**. (Dự phòng: chạy
+`14_demo_vai_tro.sql` ở 4 kết nối SQLPro `lg_admin`, `lg_daotao`, `lg_giaovu_cntt`, `lg_bgh` rồi xếp 4 bảng cạnh nhau.)
 
 **Thấy:**
 
@@ -185,13 +205,14 @@ không ghi dở**; bật lại node, đồng bộ lại, bản sao khớp (`0` d
 | Tạo bảng mới | **được** | từ chối | từ chối | từ chối |
 
 **Nói:** quản trị khác đào tạo ở quyền sửa cấu trúc; đào tạo xem CCCD qua view nhưng bị DENY đọc thẳng bảng; giáo vụ bị lọc theo
-khoa; Ban giám hiệu chỉ xem thống kê. Quyền do SQL Server kiểm soát, ứng dụng chỉ ẩn bớt menu.
+khoa; Ban giám hiệu chỉ xem thống kê. Quyền do SQL Server kiểm soát, ứng dụng chỉ ẩn bớt menu. Trang Phân quyền đóng vai từng
+tài khoản bằng `EXECUTE AS LOGIN`, nên ô đỏ là lỗi thật do SQL Server trả về (229, 262), không phải ứng dụng tự chặn.
 
 ---
 
 ## 9. Ứng dụng (1–2 phút, có thể gộp vào các phần trên)
 
-**Làm:** đăng nhập **Giáo vụ khoa CNTT** → menu chỉ còn 4 chức năng; Thống kê chỉ có khoa CNTT. Trang **Nhập điểm** sửa một điểm →
+**Làm:** đăng nhập **Giáo vụ khoa CNTT** → menu chỉ còn 5 chức năng; Thống kê chỉ có khoa CNTT. Trang **Nhập điểm** sửa một điểm →
 trang Nhật ký (đăng nhập Đào tạo) thấy dòng UPDATE do trigger ghi, có điểm cũ, điểm mới và người sửa.
 
 ---
@@ -205,7 +226,7 @@ trang Nhật ký (đăng nhập Đào tạo) thấy dòng UPDATE do trigger ghi,
   - Không có chuỗi sở hữu giữa các instance nên người dùng cần quyền đọc ở node; nối thẳng vào cổng node sẽ bỏ qua lọc theo khoa.
     Hướng sửa: chỉ mở cổng điều phối cho người dùng, hoặc chuyển view thành thủ tục `EXECUTE AS`.
   - Deadlock giữa các instance không tự phát hiện; dùng `LOCK_TIMEOUT`.
-  - Đồng bộ danh mục chạy tay; chưa có hàng đợi ghi bù khi node vắng.
+  - Hàng đợi ghi bù chỉ có cho danh mục nhân bản; ghi dữ liệu phân mảnh vào node vắng vẫn phải làm lại khi node trở lại.
 
 ---
 
@@ -218,7 +239,8 @@ trang Nhật ký (đăng nhập Đào tạo) thấy dòng UPDATE do trigger ghi,
 | Khóa ngoại giữa `SinhVien_HoSo` và `SinhVien` thế nào? | SQL Server không có khóa ngoại giữa database/instance; thay bằng trigger `trg_HoSo_KiemTraSinhVien` (lỗi 50905). |
 | Vì sao chọn nhân bản cho Khoa, HocKy, MonHoc? | Bảng nhỏ, ít đổi, đọc nhiều; node có khóa ngoại cục bộ, không phải truy vấn liên nút khi kiểm tra. |
 | Ghi vào 2 node làm sao đảm bảo cả hai cùng thành công? | `SET XACT_ABORT ON` + giao dịch phân tán qua MSDTC; một bên lỗi thì cả giao dịch ROLLBACK (demo phần 6). |
-| Một node chết thì sao? | Phần dữ liệu ở node khác vẫn đọc được; thao tác chạm node chết lỗi và bị hủy, không ghi dở; bật lại rồi đồng bộ danh mục (mục 7). |
+| Một node chết thì sao? | Phần dữ liệu ở node khác vẫn đọc, ghi được (kể cả thêm sinh viên cho khoa còn sống); thao tác chạm node chết lỗi và bị hủy, không ghi dở; thay đổi danh mục nằm trong hàng đợi và tự áp dụng khi node trở lại (mục 7). |
+| Vì sao trigger không tự đẩy thay đổi sang node? | Lỗi kết nối bên trong trigger làm hỏng giao dịch, tức là hủy luôn lệnh sửa ở điều phối. Nên trigger chỉ xếp hàng (ghi cục bộ), còn việc đẩy sang node làm ở bước riêng, mỗi node một lần thử. |
 | Làm sao biết kết quả demo là đúng? | `scripts/kiem_tra_demo.py` đối chiếu 52 điểm; trang Kiểm thử có chế độ mô phỏng lỗi chứng minh phép kiểm tra bắt được sai. |
 | Vì sao Azure SQL Edge không dùng được? | Không hỗ trợ Linked Server; dùng image `mssql/server:2022` (trên Mac Apple Silicon chạy qua giả lập amd64). |
 | Chuyển khoa sinh viên thì dữ liệu đi đâu? | Học vụ xóa ở node cũ, thêm ở node mới trong một giao dịch; hồ sơ ở điều phối giữ nguyên MaSV. Chặn nếu đã có đăng ký. |

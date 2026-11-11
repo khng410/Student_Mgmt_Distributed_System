@@ -35,7 +35,7 @@ Cách phân mảnh (chi tiết trong `database/04_fragmentation.sql`):
 
 | Bảng | Cách phân mảnh | Lưu ở đâu | Nhân bản và đồng bộ |
 | --- | --- | --- | --- |
-| `Khoa`, `HocKy`, `MonHoc` | Nhân bản toàn bộ (bảng nhỏ, ít đổi, đọc nhiều) | Bản chính ở điều phối; bản sao ở cả 3 node khoa | Một chiều điều phối → node bằng `sp_DongBoDanhMuc` (chạy tay; sửa dòng khác, thêm dòng thiếu, không xóa). Trigger `trg_LopHocPhan_KiemTraMonHoc` chặn giảng viên mở lớp cho môn của khoa khác (dùng bản sao ở chính node) |
+| `Khoa`, `HocKy`, `MonHoc` | Nhân bản toàn bộ (bảng nhỏ, ít đổi, đọc nhiều) | Bản chính ở điều phối; bản sao ở cả 3 node khoa | Một chiều điều phối → node. Mỗi thay đổi ở bản chính được trigger xếp vào hàng đợi `HangDoiDongBo`; `dm_XuLyHangDoi` (gọi `sp_DongBoDanhMuc` cho từng node: sửa dòng khác, thêm dòng thiếu, không xóa) đẩy xuống. Sửa qua thủ tục `dm_Luu...` hoặc trang Danh mục là tự đồng bộ ngay; node vắng nhận sau (`15_dong_bo_danh_muc.sql`). Trigger `trg_LopHocPhan_KiemTraMonHoc` chặn giảng viên mở lớp cho môn của khoa khác (dùng bản sao ở chính node) |
 | `GiangVien`, `Lop` | Ngang chính theo `MaKhoa` | Node của khoa đó | Không nhân bản: mỗi dòng có đúng một bản |
 | `SinhVien` (học vụ: `MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TrangThai`) | Dọc, và ngang dẫn xuất theo `Lop` | Node của khoa chứa lớp | Không nhân bản; giữ nhất quán với mảnh hồ sơ bằng giao dịch phân tán |
 | `SinhVien_HoSo` (`MaSV, CCCD, DienThoai, Email, DiaChi`) | Dọc (mảnh nhạy cảm), chung khóa `MaSV` | Điều phối | Không nhân bản; luôn ghi cùng giao dịch với mảnh học vụ |
@@ -50,7 +50,7 @@ Kiểm thử đồng bộ: `13_dong_bo_kiem_thu.sql`. Mất kết nối: `script
 ## Cấu trúc thư mục
 
 ```
-database/   15 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b; 14 là file demo vai trò)
+database/   16 script SQL, chạy theo thứ tự số (bắt đầu từ 02; có 02a, 02b; 14 là file demo vai trò)
 scripts/    chay_sql.py (chạy file .sql), trien_khai.py (dựng lại cả 4 instance bằng một lệnh),
             thu_mat_ket_noi.py (dừng một node, thử, bật lại, đồng bộ lại),
             kiem_tra_demo.py (chạy 5 file demo, in ĐÚNG / SAI cho từng kết quả cần trình bày)
@@ -107,6 +107,7 @@ Mọi file chạy lại được nhiều lần; file lưu UTF-8 có BOM để ti
 | 12 | `12_linked_server.sql` | Truy vấn liên nút và tổng hợp toàn hệ thống qua Linked Server (tên 4 phần, OPENQUERY, giao dịch phân tán) |
 | 13 | `13_dong_bo_kiem_thu.sql` | Kiểm thử đồng bộ: đổi ở một nơi, kiểm tra ở cả 4 nơi (thêm, sửa, chuyển khoa, xóa, danh mục); mọi thay đổi đều ROLLBACK |
 | 14 | `14_demo_vai_tro.sql` | Demo khác nhau giữa các vai trò: chạy 4 lần, mỗi lần bằng một tài khoản (không chạy bằng `sa`, không nằm trong `trien_khai.py`) |
+| 15 | `15_dong_bo_danh_muc.sql` | Tự đồng bộ danh mục: hàng đợi `HangDoiDongBo`, trigger xếp hàng, `dm_XuLyHangDoi`; thủ tục quản lý danh mục `dm_LuuMonHoc`, `dm_LuuHocKy`, `dm_LuuGiangVien`, `dm_LuuLop` |
 
 Sau khi chạy `04` và `05`, các bảng kiểm tra ở cuối file phải cho `Thieu = Thua = 0`.
 Chạy lại `02` hoặc `02a` thì phải chạy lại từ `02b` đến `10` (và phần E2 của `11` để tạo lại index); chạy lại `05`, `07`, `08`, `09` riêng lẻ không làm mất quyền đã cấp.
@@ -143,7 +144,7 @@ Chức năng theo vai trò:
 | --- | --- |
 | Ban giám hiệu | Thống kê |
 | Giáo vụ | Thống kê, Tìm kiếm, Bảng điểm (kèm lịch sử sửa điểm, tải CSV), Cảnh báo học vụ, Nhập điểm (chỉ khoa mình) |
-| Đào tạo, Quản trị | Các trang trên và thêm: Sinh viên (thêm, sửa, xóa, chuyển khoa), Đăng ký học phần, Lớp học phần, Phân tán (dữ liệu ở node nào, ghép hai mảnh, bảng từng node, demo COMMIT/ROLLBACK, trạng thái kết nối 4 instance, đồng bộ danh mục), Nhật ký |
+| Đào tạo, Quản trị | Các trang trên và thêm: Sinh viên (thêm, sửa, xóa, chuyển khoa), Đăng ký học phần, Lớp học phần, Danh mục (thêm, sửa môn học, học kỳ, giảng viên, lớp), Phân tán (dữ liệu ở node nào, ghép hai mảnh, bảng từng node, demo COMMIT/ROLLBACK, trạng thái kết nối 4 instance, đồng bộ danh mục), Nhật ký |
 | Quản trị | Thêm trang **Kiểm thử**: chạy 13 ca kiểm thử hàm, thủ tục, trigger (kể cả trigger chặn lỗi), mỗi ca báo ĐÚNG/SAI; mọi thay đổi đều được hoàn tác |
 | Quản trị | Thêm trang **Phân quyền**: đóng vai từng tài khoản (`EXECUTE AS LOGIN`, quyền `IMPERSONATE` cấp ở `10_security.sql`) và thử cùng 8 việc của `14_demo_vai_tro.sql`, hiện thành bảng vai trò × việc được làm |
 
@@ -158,14 +159,16 @@ Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa 
 | --- | --- |
 | Đọc dữ liệu chỉ ở điều phối (`SinhVien_HoSo`) hoặc ở node còn sống | Vẫn chạy bình thường |
 | Đọc node vắng, hoặc VIEW toàn cục (cần đủ 3 node) | Lỗi sau khoảng 10 giây (không kết nối được); không trả kết quả thiếu |
-| `sp_ThemSinhVien` (kể cả cho lớp CNTT) | Lỗi: thủ tục tìm lớp ở cả 3 node nên một node vắng là chặn tất cả. Không dòng nào được ghi |
+| `sp_ThemSinhVien` cho lớp của khoa còn sống | **Vẫn chạy**: thủ tục hỏi lần lượt từng node và dừng ở node có lớp; giao dịch chỉ gồm node đó và điều phối |
+| `sp_ThemSinhVien` cho lớp của node vắng | Lỗi 50012 sau khoảng 10 giây, không dòng nào được ghi |
 | Giao dịch phân tán chạm node vắng | Lỗi, giao dịch bị hủy; điều phối không giữ dòng sửa dở |
-| `sp_DongBoDanhMuc` | Lỗi, hủy toàn bộ (một giao dịch); không node nào bị đồng bộ nửa chừng |
-| Sửa danh mục ở điều phối trong lúc node vắng | Được; bản sao ở node bị cũ |
+| `sp_DongBoDanhMuc` cho node vắng | Lỗi, hủy toàn bộ (một giao dịch); không node nào bị đồng bộ nửa chừng |
+| Sửa danh mục qua `dm_LuuMonHoc`, `dm_LuuHocKy` hoặc trang Danh mục | Bản chính và các node còn sống đổi ngay; mục của node vắng **ở lại hàng đợi** kèm số lần thử và lỗi |
+| Sửa thẳng danh mục ở điều phối bằng `UPDATE` | Được; trigger xếp 3 mục vào hàng đợi, bản sao ở node chưa đổi cho tới lần xử lý hàng đợi |
 
-Phục hồi: `docker start <node>` → chạy `EXEC dbo.sp_DongBoDanhMuc @MaKhoa = '<khoa>'` để bản sao khớp lại bản chính → chạy lại phần 2 của `04` hoặc `13` để kiểm tra.
+Phục hồi: `docker start <node>` → chạy `EXEC dbo.dm_XuLyHangDoi` (hoặc bấm **Xử lý hàng đợi** ở trang Phân tán, mục Đồng bộ danh mục): node vừa trở lại nhận đủ thay đổi còn chờ, hàng đợi rỗng → chạy lại phần 2 của `04` hoặc `13` để kiểm tra.
 Dữ liệu phân mảnh (sinh viên, đăng ký, điểm) không cần đồng bộ lại vì mỗi dòng chỉ có một bản và giao dịch bị hủy không để lại gì.
-Chưa có hàng đợi ghi bù cho node vắng: thao tác ghi vào node đó phải làm lại sau khi node trở lại.
+Hàng đợi chỉ dành cho danh mục nhân bản. Thao tác ghi dữ liệu phân mảnh (sinh viên, đăng ký, điểm) vào node vắng vẫn phải làm lại sau khi node trở lại.
 
 ## Giới hạn đã biết của kiến trúc nhiều instance
 

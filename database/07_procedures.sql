@@ -47,15 +47,39 @@ BEGIN
 END
 GO
 
-/* ---------- Hàm phụ: lớp này thuộc khoa nào (tìm ở cả 3 node); không có lớp trả về NULL ---------- */
-CREATE OR ALTER FUNCTION dbo.KhoaCuaLop (@MaLop VARCHAR(15))
-RETURNS VARCHAR(10)
+/* ---------- Thủ tục phụ: lớp này thuộc khoa nào ----------
+   Hỏi lần lượt từng node và dừng ở node đầu tiên có lớp, nên một node KHÁC mất kết nối không chặn được việc
+   thêm sinh viên cho các khoa còn lại (hàm UNION ALL 3 node trước đây lỗi ngay khi một node vắng).
+   Không tìm thấy mà có node không trả lời: báo lỗi 50012 thay vì kết luận "không có lớp".
+   Gọi TRƯỚC khi mở giao dịch: lỗi kết nối bắt được ở đây sẽ làm hỏng giao dịch đang mở (XACT_ABORT).
+   (Không đặt tên bắt đầu bằng sp_ để không lẫn vào 14 thủ tục chính.) */
+CREATE OR ALTER PROCEDURE dbo.TimKhoaCuaLop
+    @MaLop   VARCHAR(15),
+    @MaKhoa  VARCHAR(10) OUTPUT
 AS
 BEGIN
-    RETURN (SELECT MaKhoa FROM (SELECT MaLop, MaKhoa FROM QLSV_CNTT.dbo.Lop
-                                UNION ALL SELECT MaLop, MaKhoa FROM QLSV_NgoaiNgu.dbo.Lop
-                                UNION ALL SELECT MaLop, MaKhoa FROM QLSV_DuLich.dbo.Lop) l
-            WHERE l.MaLop = @MaLop);
+    SET NOCOUNT ON;
+    SET @MaKhoa = NULL;
+    DECLARE @db SYSNAME, @sql NVARCHAR(MAX), @nodeVang INT = 0;
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR
+        SELECT db FROM (VALUES (1, N'QLSV_CNTT'), (2, N'QLSV_NgoaiNgu'), (3, N'QLSV_DuLich')) n(tt, db) ORDER BY tt;
+    OPEN c;
+    FETCH NEXT FROM c INTO @db;
+    WHILE @@FETCH_STATUS = 0 AND @MaKhoa IS NULL
+    BEGIN
+        BEGIN TRY
+            SET @sql = N'SELECT @k = MaKhoa FROM ' + QUOTENAME(@db) + N'.dbo.Lop WHERE MaLop = @MaLop;';
+            EXEC sp_executesql @sql, N'@MaLop VARCHAR(15), @k VARCHAR(10) OUTPUT', @MaLop, @MaKhoa OUTPUT;
+        END TRY
+        BEGIN CATCH
+            SET @nodeVang += 1;                      -- node này không trả lời: thử node kế tiếp
+        END CATCH
+        FETCH NEXT FROM c INTO @db;
+    END
+    CLOSE c;
+    DEALLOCATE c;
+    IF @MaKhoa IS NULL AND @nodeVang > 0
+        THROW 50012, N'Chưa tìm thấy lớp ở các node đang hoạt động; có node mất kết nối nên chưa kết luận được.', 1;
 END
 GO
 
@@ -65,7 +89,8 @@ GO
    sửa dòng khác nhau, thêm dòng còn thiếu. KHÔNG xóa dòng ở node (có thể đang
    được khóa ngoại tham chiếu). @MaKhoa NULL = đồng bộ cả 3 node. */
 CREATE OR ALTER PROCEDURE dbo.sp_DongBoDanhMuc
-    @MaKhoa VARCHAR(10) = NULL
+    @MaKhoa VARCHAR(10) = NULL,
+    @ImLang BIT = 0                 -- 1: không trả bảng kết quả (khi được gọi từ dm_XuLyHangDoi, 15_dong_bo_danh_muc.sql)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -127,6 +152,9 @@ BEGIN
         END
         CLOSE c;
         DEALLOCATE c;
+        -- node vừa đồng bộ xong thì không còn gì chờ trong hàng đợi (bảng tạo ở 15_dong_bo_danh_muc.sql)
+        IF OBJECT_ID(N'dbo.HangDoiDongBo') IS NOT NULL
+            DELETE dbo.HangDoiDongBo WHERE @MaKhoa IS NULL OR MaKhoa = @MaKhoa;
         COMMIT;
     END TRY
     BEGIN CATCH
@@ -134,7 +162,8 @@ BEGIN
         THROW;
     END CATCH
 
-    SELECT Node, Bang, DaSua, DaThem FROM #kq_DongBo ORDER BY Node, Bang;
+    IF @ImLang = 0
+        SELECT Node, Bang, DaSua, DaThem FROM #kq_DongBo ORDER BY Node, Bang;
 END
 GO
 
@@ -159,7 +188,7 @@ BEGIN
 
     DECLARE @k VARCHAR(10), @db SYSNAME, @sql NVARCHAR(MAX);
 
-    SET @k = dbo.KhoaCuaLop(@MaLop);
+    EXEC dbo.TimKhoaCuaLop @MaLop, @k OUTPUT;
 
     IF @k IS NULL
         THROW 50010, N'Không tìm thấy lớp này ở node nào.', 1;
@@ -167,6 +196,8 @@ BEGIN
         THROW 50011, N'Mã sinh viên đã tồn tại.', 1;
 
     SET @db = dbo.DbCuaKhoa(@k);
+    -- Báo cho trigger trg_HoSo_KiemTraSinhVien biết sinh viên nằm ở node nào, để nó chỉ hỏi node đó (không cần cả 3 node sống)
+    EXEC sp_set_session_context N'KhoaSV', @k;
 
     BEGIN TRY
         BEGIN TRAN;
@@ -181,13 +212,19 @@ BEGIN
         VALUES (@MaSV, @CCCD, @DienThoai, @Email, @DiaChi);
 
         COMMIT;
+        EXEC sp_set_session_context N'KhoaSV', NULL;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK;
+        EXEC sp_set_session_context N'KhoaSV', NULL;
         THROW;
     END CATCH
 
-    SELECT MaSV, HoTen, MaLop, TenKhoa, TrangThai FROM dbo.vw_SinhVien_ToanCuc WHERE MaSV = @MaSV;
+    -- Đọc lại từ đúng node của sinh viên (không qua view toàn cục, vì view cần cả 3 node đang sống)
+    SET @sql = N'SELECT s.MaSV, s.HoTen, s.MaLop, k.TenKhoa, s.TrangThai
+                 FROM ' + @db + N'.dbo.SinhVien s JOIN ' + @db + N'.dbo.Lop l ON l.MaLop = s.MaLop
+                 JOIN dbo.Khoa k ON k.MaKhoa = l.MaKhoa WHERE s.MaSV = @MaSV;';
+    EXEC sp_executesql @sql, N'@MaSV CHAR(8)', @MaSV;
 END
 GO
 
@@ -212,7 +249,7 @@ BEGIN
     IF @kCu IS NULL
         THROW 50020, N'Không tìm thấy sinh viên.', 1;
 
-    SET @kMoi = dbo.KhoaCuaLop(@MaLopMoi);
+    EXEC dbo.TimKhoaCuaLop @MaLopMoi, @kMoi OUTPUT;
     IF @kMoi IS NULL
         THROW 50021, N'Không tìm thấy lớp mới.', 1;
     IF @kMoi = @kCu

@@ -55,7 +55,7 @@ chay(f"Đọc trực tiếp node vắng mặt qua tên 4 phần", f"SELECT COUNT
 chay("VIEW toàn cục (cần đủ 3 node)", "SELECT COUNT(*) FROM dbo.vw_SinhVien_ToanCuc")
 chay("Đọc thống kê của khoa còn lại (CNTT hoặc NN) trực tiếp: vẫn sống" , "SELECT COUNT(*) FROM LS_QLSV_NgoaiNgu.QLSV_NgoaiNgu.dbo.SinhVien" if K != "NN" else "SELECT COUNT(*) FROM LS_QLSV_CNTT.QLSV_CNTT.dbo.SinhVien")
 chay("Đọc dữ liệu chỉ nằm ở điều phối (SinhVien_HoSo): vẫn sống", "SELECT COUNT(*) FROM dbo.SinhVien_HoSo")
-chay("Thêm sinh viên (thủ tục tìm lớp ở cả 3 node)",
+chay("Thêm sinh viên lớp CNTT: vẫn được, vì chỉ cần node CNTT và điều phối",
      "EXEC dbo.sp_ThemSinhVien @MaSV='24019998', @HoTen=N'Thử Mất Kết Nối', @NgaySinh='2006-01-01', @GioiTinh=N'Nam', "
      "@MaLop='66.CNTT-1', @CCCD='001306009998', @Email='24019998@sv.qlsv.edu.vn'")
 chay("Giao dịch phân tán chạm node vắng: sửa 1 dòng ở điều phối rồi 1 dòng ở node",
@@ -73,8 +73,11 @@ chay("Bản sao ở node CŨ so với bản chính (mong đợi lệch 1)", KHOP
 chay("Đồng bộ lại danh mục cho node vừa phục hồi", "EXEC dbo.sp_DongBoDanhMuc @MaKhoa = ?", (K,))
 chay("Sau đồng bộ: bản sao khớp bản chính (mong đợi 0)", KHOP + " AS Lech")
 chay("VIEW toàn cục trở lại bình thường (72 sinh viên)", "SELECT COUNT(*) FROM dbo.vw_SinhVien_ToanCuc")
+chay("Xóa sinh viên đã thêm lúc node vắng (xóa cần view toàn cục nên phải đợi node trở lại)", "EXEC dbo.sp_XoaSinhVien @MaSV = '24019998'")
 chay("Thêm sinh viên lại được rồi xóa (kiểm tra ghi 2 mảnh)",
      "BEGIN TRAN; EXEC dbo.sp_ThemSinhVien @MaSV='24019998', @HoTen=N'Thử Mất Kết Nối', @NgaySinh='2006-01-01', "
      "@GioiTinh=N'Nam', @MaLop='66.CNTT-1', @CCCD='001306009998', @Email='24019998@sv.qlsv.edu.vn'; ROLLBACK")
 chay("Trả tên môn về như cũ", "UPDATE dbo.MonHoc SET TenMH = ? WHERE MaMH = ?", (ten_cu, ma))
 chay("Đồng bộ lần cuối để bản sao về như cũ", "EXEC dbo.sp_DongBoDanhMuc @MaKhoa = ?", (K,))
+chay("Xử lý hàng đợi: các node còn lại nhận nốt thay đổi danh mục của kịch bản này", "EXEC dbo.dm_XuLyHangDoi")
+chay("Hàng đợi sau cùng (mong đợi 0 mục)", "SELECT COUNT(*) FROM dbo.HangDoiDongBo")

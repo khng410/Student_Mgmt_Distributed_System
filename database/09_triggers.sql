@@ -48,6 +48,21 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
+    -- sp_ThemSinhVien báo trước node của sinh viên (SESSION_CONTEXT 'KhoaSV'): chỉ hỏi node đó, nên node khác mất
+    -- kết nối không chặn việc thêm hồ sơ. Không có gợi ý, hoặc gợi ý không khớp: kiểm tra đủ 3 node như cũ.
+    DECLARE @k VARCHAR(10) = CAST(SESSION_CONTEXT(N'KhoaSV') AS VARCHAR(10));
+    IF @k = 'CNTT'
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM inserted i WHERE NOT EXISTS (SELECT 1 FROM QLSV_CNTT.dbo.SinhVien WHERE MaSV = i.MaSV)) RETURN;
+    END
+    ELSE IF @k = 'NN'
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM inserted i WHERE NOT EXISTS (SELECT 1 FROM QLSV_NgoaiNgu.dbo.SinhVien WHERE MaSV = i.MaSV)) RETURN;
+    END
+    ELSE IF @k = 'DL'
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM inserted i WHERE NOT EXISTS (SELECT 1 FROM QLSV_DuLich.dbo.SinhVien WHERE MaSV = i.MaSV)) RETURN;
+    END
     IF EXISTS (SELECT 1 FROM inserted i
                WHERE NOT EXISTS (SELECT 1 FROM QLSV_CNTT.dbo.SinhVien     WHERE MaSV = i.MaSV)
                  AND NOT EXISTS (SELECT 1 FROM QLSV_NgoaiNgu.dbo.SinhVien WHERE MaSV = i.MaSV)

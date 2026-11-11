@@ -15,6 +15,7 @@ for cong, (db, khoa) in NODE.items():               # mỗi instance node: datab
     print("== 02a_create_node.sql", db); chay(cong, f("02a_create_node.sql"), {"NODE_DB": db, "MA_KHOA": khoa})
 for t in ["02_create_tables.sql", "02b_node_links.sql", "03_seed_data.sql", "04_fragmentation.sql", "05_views.sql", "06_queries_40.sql",
           "07_procedures.sql", "08_functions.sql", "09_triggers.sql", "10_security.sql",
-          "11_transactions_concurrency.sql", "12_linked_server.sql", "13_dong_bo_kiem_thu.sql"][:int(sys.argv[1]) if len(sys.argv) > 1 else 99]:
+          "11_transactions_concurrency.sql", "12_linked_server.sql", "13_dong_bo_kiem_thu.sql",
+          "15_dong_bo_danh_muc.sql"][:int(sys.argv[1]) if len(sys.argv) > 1 else 99]:
     print("==", t); chay(TH, f(t))
 print("\nXONG: đã dựng lại 4 instance và chạy hết các file SQL, không có lỗi. Kiểm tra kết quả demo: python3 -I scripts/kiem_tra_demo.py")

@@ -129,6 +129,8 @@ BEGIN TRY
     SELECT MaSV, CCCD, DienThoai, Email, DiaChi FROM QLSV_TapTrung.dbo.SinhVien;
     ALTER TABLE QLSV_TongHop.dbo.SinhVien_HoSo ENABLE TRIGGER ALL;
     PRINT N'Đã nạp QLSV_TongHop.SinhVien_HoSo';
+    IF OBJECT_ID(N'QLSV_TongHop.dbo.HangDoiDongBo') IS NOT NULL       -- cả 3 node vừa được nạp lại từ đầu: không còn gì chờ đồng bộ
+        EXEC (N'DELETE QLSV_TongHop.dbo.HangDoiDongBo');
 
     COMMIT;
 END TRY

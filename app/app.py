@@ -28,7 +28,7 @@ VAI_TRO = {
     "lg_bgh": "Ban giám hiệu",
 }
 GIAOVU = ["Thống kê", "Tìm kiếm", "Bảng điểm", "Cảnh báo học vụ", "Nhập điểm"]
-DAOTAO = GIAOVU + ["Sinh viên", "Đăng ký học phần", "Lớp học phần", "Phân tán", "Nhật ký"]
+DAOTAO = GIAOVU + ["Sinh viên", "Đăng ký học phần", "Lớp học phần", "Danh mục", "Phân tán", "Nhật ký"]
 MENU = {"lg_bgh": ["Thống kê"], "lg_daotao": DAOTAO, "lg_admin": DAOTAO + ["Kiểm thử", "Phân quyền"],
         "lg_giaovu_cntt": GIAOVU, "lg_giaovu_nn": GIAOVU, "lg_giaovu_dl": GIAOVU}
 
@@ -61,15 +61,18 @@ NHAN_COT = {"DiemQT": "Điểm quá trình", "DiemThi": "Điểm thi", "DiemTK":
             "SoMonKhongDat": "Môn không đạt", "LyDo": "Lý do cảnh báo", "TinChiTichLuy": "Tín chỉ tích lũy", "NodeKhoa": "Node",
             "ThoiGian": "Thời gian", "TenBang": "Bảng", "HanhDong": "Hành động", "KhoaChinh": "Khóa chính",
             "NoiDungCu": "Trước", "NoiDungMoi": "Sau", "NguoiThucHien": "Người thực hiện", "Node": "Node",
+            "TenHK": "Tên học kỳ", "NamHoc": "Năm học", "NgayBatDau": "Bắt đầu", "NgayKetThuc": "Kết thúc", "LoaiMH": "Loại môn",
+            "HocVi": "Học vị", "NienKhoa": "Niên khóa", "MaGVCN": "GV chủ nhiệm", "SoMucCho": "Số mục chờ", "Loi": "Lỗi",
+            "SoLanThu": "Số lần thử", "LoiGanNhat": "Lỗi gần nhất", "Bang": "Bảng",
             "CCCD": "CCCD", "DienThoai": "Điện thoại", "Email": "Email", "DiaChi": "Địa chỉ",
             "MaLoi": "Mã lỗi", "ThongBao": "Thông báo"}
 
 # Thanh bên: chức năng chia nhóm, mỗi chức năng một biểu tượng (Material Symbols) và một dòng mô tả dưới tiêu đề trang
 NHOM_MENU = [("Tổng quan", ["Thống kê"]), ("Tra cứu", ["Tìm kiếm", "Bảng điểm", "Cảnh báo học vụ"]),
-             ("Nghiệp vụ", ["Nhập điểm", "Sinh viên", "Đăng ký học phần", "Lớp học phần"]),
+             ("Nghiệp vụ", ["Nhập điểm", "Sinh viên", "Đăng ký học phần", "Lớp học phần", "Danh mục"]),
              ("Hệ thống phân tán", ["Phân tán", "Nhật ký"]), ("Quản trị", ["Kiểm thử", "Phân quyền"])]
 BIEU_TUONG = {"Thống kê": "monitoring", "Tìm kiếm": "search", "Bảng điểm": "grading", "Cảnh báo học vụ": "warning", "Nhập điểm": "edit_note",
-              "Sinh viên": "group", "Đăng ký học phần": "how_to_reg", "Lớp học phần": "class",
+              "Sinh viên": "group", "Đăng ký học phần": "how_to_reg", "Lớp học phần": "class", "Danh mục": "category",
               "Phân tán": "hub", "Nhật ký": "history", "Kiểm thử": "science", "Phân quyền": "shield_person"}
 MO_TA = {"Thống kê": "Kết quả học tập theo khoa và học kỳ, tổng hợp từ cả 3 node.",
          "Tìm kiếm": "Tìm sinh viên toàn trường theo mã, họ tên (không cần gõ dấu), khoa, lớp, trạng thái.",
@@ -79,6 +82,7 @@ MO_TA = {"Thống kê": "Kết quả học tập theo khoa và học kỳ, tổn
          "Sinh viên": "Thêm, sửa, xóa và chuyển khoa. Mỗi thao tác ghi cả hai mảnh dữ liệu trong một giao dịch.",
          "Đăng ký học phần": "Đăng ký hoặc hủy lớp học phần cho một sinh viên.",
          "Lớp học phần": "Mở lớp học phần mới ở node của khoa giảng viên.",
+         "Danh mục": "Thêm, sửa môn học, học kỳ (tự đồng bộ xuống 3 node) và giảng viên, lớp (ghi vào node của khoa).",
          "Phân tán": "Dữ liệu nằm ở node nào, một sinh viên được ghép từ đâu, và demo giao dịch phân tán.",
          "Nhật ký": "Các thay đổi do trigger ghi lại ở từng node.",
          "Kiểm thử": "Chạy thử hàm, thủ tục và trigger, đối chiếu với kết quả mong đợi. Mọi thay đổi đều được hoàn tác.",
@@ -932,10 +936,41 @@ def pt_bang_tho():
 HAU_TO_THU = " (bản mới)"          # demo đồng bộ: sửa tên môn = thêm hậu tố này, bỏ sửa = gỡ hậu tố
 
 
+def bao_dong_bo(kq):
+    """Thông báo kết quả dm_XuLyHangDoi (một dòng mỗi node đã thử)."""
+    if kq is None or kq.empty:
+        st.toast("Hàng đợi rỗng, không có gì để đồng bộ.", icon="ℹ️")
+        return
+    cho = kq[kq["KetQua"] != "Đã đồng bộ"]
+    if cho.empty:
+        st.toast(f"Đã đồng bộ xuống {len(kq)} node.", icon="✅")
+    else:
+        st.warning(f"Đã đồng bộ {len(kq) - len(cho)}/{len(kq)} node. Node chưa nhận: {', '.join(KHOA[k] for k in cho['Node'])} "
+                   "(không trả lời). Thay đổi nằm trong hàng đợi, bấm **Xử lý hàng đợi** khi node chạy lại.",
+                   icon=":material/schedule:")
+
+
+def bang_hang_doi():
+    """Hàng đợi đồng bộ: mỗi dòng là một thay đổi danh mục mà một node chưa nhận."""
+    hd = xem("SELECT MaKhoa, Bang, KhoaChinh, HanhDong, ThoiGian, SoLanThu, LoiGanNhat FROM dbo.HangDoiDongBo ORDER BY MaHD")
+    if hd is None:
+        return 0
+    if hd.empty:
+        st.success("Hàng đợi rỗng: mọi node đã nhận đủ thay đổi của danh mục.", icon=":material/check_circle:")
+        return 0
+    hd["MaKhoa"] = hd["MaKhoa"].map(lambda k: f"Node {KHOA.get(k, k)}")
+    st.warning(f"**{len(hd)}** mục đang chờ trong hàng đợi.", icon=":material/schedule:")
+    st.dataframe(hd, hide_index=True, width="stretch", column_config={
+        "MaKhoa": "Node chưa nhận", "Bang": "Bảng", "KhoaChinh": "Khóa", "HanhDong": "Hành động", "ThoiGian": "Lúc",
+        "SoLanThu": "Số lần thử", "LoiGanNhat": "Lỗi gần nhất"})
+    return len(hd)
+
+
 def pt_dong_bo():
-    """Mục 6: sửa một môn ở bản chính, thấy 3 bản sao ở node bị cũ, rồi đồng bộ bằng sp_DongBoDanhMuc."""
-    st.markdown("Khoa, Học kỳ, Môn học được **nhân bản**: bản chính ở điều phối, mỗi node giữ một bản sao. Sửa ở bản chính "
-                "**không tự lan** xuống node; thủ tục `sp_DongBoDanhMuc` chép thay đổi xuống.")
+    """Mục 6: sửa thẳng một môn ở bản chính -> trigger xếp hàng đợi -> xử lý hàng đợi chép xuống các node đang sống."""
+    st.markdown("Khoa, Học kỳ, Môn học được **nhân bản**: bản chính ở điều phối, mỗi node giữ một bản sao. Khi bản chính đổi, "
+                "trigger ghi vào **hàng đợi** một mục cho mỗi node; xử lý hàng đợi chép thay đổi xuống. Node mất kết nối thì "
+                "mục của nó ở lại hàng đợi cho tới khi node chạy lại. Trang **Danh mục** sửa qua thủ tục nên tự xử lý hàng đợi ngay.")
     mon = xem("SELECT MaMH, TenMH FROM dbo.MonHoc ORDER BY MaMH")
     if mon is None or mon.empty:
         return
@@ -944,47 +979,47 @@ def pt_dong_bo():
     quan_tri = st.session_state.user == "lg_admin"
     da_sua = ten[ma].endswith(HAU_TO_THU)
     c1, c2, c3 = st.columns(3)
-    if c1.button("Bỏ sửa ở bản chính" if da_sua else "1. Sửa tên ở bản chính", icon=":material/edit:", width="stretch",
-                 disabled=not quan_tri, help=None if quan_tri else "Chỉ Quản trị sửa thẳng được danh mục; đăng nhập lg_admin để thử bước này."):
+    if c1.button("Bỏ sửa ở bản chính" if da_sua else "1. Sửa thẳng tên ở bản chính", icon=":material/edit:", width="stretch",
+                 disabled=not quan_tri, help="Chạy UPDATE thẳng vào bảng MonHoc (không qua thủ tục), để thấy hàng đợi trước khi xử lý."
+                 if quan_tri else "Chỉ Quản trị sửa thẳng được bảng danh mục; Phòng Đào tạo sửa ở trang Danh mục (qua thủ tục)."):
         moi = ten[ma][:-len(HAU_TO_THU)] if da_sua else ten[ma] + HAU_TO_THU
         try:
             chay("UPDATE dbo.MonHoc SET TenMH = ? WHERE MaMH = ?", moi, ma)
-            bao("success", f"Đã đổi tên môn {ma} ở bản chính thành “{moi}”. Các bản sao ở node chưa đổi.")
+            bao("success", f"Đã đổi tên môn {ma} ở bản chính thành “{moi}”. Trigger đã xếp 3 mục vào hàng đợi; các bản sao chưa đổi.")
         except pyodbc.Error as e:
             bao("error", loi(e))
         st.rerun()
-    pham_vi = c2.selectbox("Đồng bộ xuống", [None, "CNTT", "NN", "DL"], key="db_pham_vi", label_visibility="collapsed",
-                           format_func=lambda k: "Đồng bộ cả 3 node" if k is None else f"Chỉ node {KHOA[k]}")
-    dong_bo = c3.button("2. Chạy sp_DongBoDanhMuc", type="primary", icon=":material/sync:", width="stretch")
-    if dong_bo:
-        try:
-            st.session_state["db_kq"] = chay("SET XACT_ABORT ON; EXEC dbo.sp_DongBoDanhMuc @MaKhoa = ?", pham_vi)[-1]
-            st.toast("Đã đồng bộ", icon="✅")
-        except pyodbc.Error as e:
-            st.session_state.pop("db_kq", None)
-            st.error(loi(e))
+    pham_vi = c2.selectbox("Xử lý cho", [None, "CNTT", "NN", "DL"], key="db_pham_vi", label_visibility="collapsed",
+                           format_func=lambda k: "Mọi node còn mục chờ" if k is None else f"Chỉ node {KHOA[k]}")
+    if c3.button("2. Xử lý hàng đợi", type="primary", icon=":material/sync:", width="stretch"):
+        with st.spinner("Đang đồng bộ (node mất kết nối sẽ mất khoảng 10 giây mới báo lỗi)..."):
+            kq = xem("EXEC dbo.dm_XuLyHangDoi @MaKhoa = ?", pham_vi)
+        st.session_state["db_kq"] = kq
+        bao_dong_bo(kq)
 
-    vi_tri = xem("SELECT N'Điều phối (bản chính)' AS Noi, TenMH, SoTinChi FROM dbo.MonHoc WHERE MaMH = ? "
-                 "UNION ALL SELECT N'Node CNTT (bản sao)', TenMH, SoTinChi FROM QLSV_CNTT.dbo.MonHoc WHERE MaMH = ? "
-                 "UNION ALL SELECT N'Node Ngoại ngữ (bản sao)', TenMH, SoTinChi FROM QLSV_NgoaiNgu.dbo.MonHoc WHERE MaMH = ? "
-                 "UNION ALL SELECT N'Node Du lịch (bản sao)', TenMH, SoTinChi FROM QLSV_DuLich.dbo.MonHoc WHERE MaMH = ?", ma, ma, ma, ma)
-    if vi_tri is None or vi_tri.empty:
-        return
-    goc = vi_tri.iloc[0]
-    vi_tri["Khớp bản chính"] = ["bản chính"] + ["✅ khớp" if (r.TenMH, r.SoTinChi) == (goc.TenMH, goc.SoTinChi) else "❌ lệch (bản cũ)"
-                                               for r in vi_tri.iloc[1:].itertuples()]
-    lech = int(vi_tri["Khớp bản chính"].str.startswith("❌").sum()) + (4 - len(vi_tri))
-    (st.success if lech == 0 else st.warning)(
-        f"Môn {ma}: cả 3 bản sao khớp bản chính." if lech == 0 else
-        f"Môn {ma}: {lech} bản sao đang lệch bản chính. Bấm “2. Chạy sp_DongBoDanhMuc” để chép thay đổi xuống.",
-        icon=":material/check_circle:" if lech == 0 else ":material/sync_problem:")
-    st.dataframe(vi_tri.style.map(lambda v: "background-color: #fee2e2; color: #0f172a" if str(v).startswith("❌") else
-                                  ("background-color: #dcfce7; color: #0f172a" if str(v).startswith("✅") else ""), subset=["Khớp bản chính"]),
-                 hide_index=True, width="stretch", column_config={"Noi": "Nơi lưu", "TenMH": "Tên môn", "SoTinChi": "Tín chỉ"})
-    if "db_kq" in st.session_state:
-        with st.expander("Kết quả lần đồng bộ gần nhất (số dòng thủ tục đã sửa, đã thêm ở từng node)", expanded=dong_bo):
-            st.dataframe(st.session_state["db_kq"], hide_index=True, width="stretch",
-                         column_config={"Bang": "Bảng", "DaSua": "Đã sửa", "DaThem": "Đã thêm"})
+    # Tên môn ở 4 nơi; hỏi riêng từng nơi để một node mất kết nối không làm hỏng cả bảng
+    dong, goc = [], None
+    for noi, db in [("Điều phối (bản chính)", "dbo"), ("Node CNTT (bản sao)", "QLSV_CNTT.dbo"),
+                    ("Node Ngoại ngữ (bản sao)", "QLSV_NgoaiNgu.dbo"), ("Node Du lịch (bản sao)", "QLSV_DuLich.dbo")]:
+        try:
+            r = chay(f"SELECT TenMH, SoTinChi FROM {db}.MonHoc WHERE MaMH = ?", ma)[0]      # tên lấy từ danh sách cố định
+            gt = (r.iloc[0]["TenMH"], int(r.iloc[0]["SoTinChi"])) if not r.empty else None
+        except pyodbc.Error:
+            gt = "mat"
+        if goc is None:
+            goc = gt
+        dong.append((noi, "" if gt in (None, "mat") else gt[0],
+                     "bản chính" if noi.startswith("Điều phối") else "⚠️ không kết nối được" if gt == "mat" else
+                     "❌ chưa có" if gt is None else "✅ khớp" if gt == goc else "❌ lệch (bản cũ)"))
+    vi_tri = pd.DataFrame(dong, columns=["Nơi lưu", "Tên môn", "Khớp bản chính"])
+    to = lambda v: ("background-color: #dcfce7; color: #0f172a" if str(v).startswith("✅") else
+                    "background-color: #fee2e2; color: #0f172a" if str(v).startswith("❌") else
+                    "background-color: #fef9c3; color: #0f172a" if str(v).startswith("⚠️") else "")
+    st.dataframe(vi_tri.style.map(to, subset=["Khớp bản chính"]), hide_index=True, width="stretch")
+    bang_hang_doi()
+    if st.session_state.get("db_kq") is not None and not st.session_state["db_kq"].empty:
+        with st.expander("Kết quả lần xử lý hàng đợi gần nhất"):
+            bang(st.session_state["db_kq"])
 
 
 def pt_trang_thai():
@@ -1270,6 +1305,119 @@ def kiem_thu():
                     st.code(sql, language="sql", wrap_lines=True)
 
 
+BA_NODE = "SELECT * FROM QLSV_CNTT.dbo.{0} UNION ALL SELECT * FROM QLSV_NgoaiNgu.dbo.{0} UNION ALL SELECT * FROM QLSV_DuLich.dbo.{0}"
+
+
+def luu_danh_muc(sql, *tham_so, ok, dong_bo=False):
+    """Gọi thủ tục dm_Luu...; với danh mục nhân bản (dong_bo=True) thủ tục trả kết quả đồng bộ từng node."""
+    try:
+        kq = chay(sql, *tham_so)
+    except pyodbc.Error as e:
+        st.error(loi(e))
+        return
+    if dong_bo:
+        cho = kq[-1][kq[-1]["KetQua"] != "Đã đồng bộ"] if kq else pd.DataFrame()
+        bao("success" if cho.empty else "warning",
+            ok + (" Đã đồng bộ xuống cả 3 node." if cho.empty else
+                  f" Node chưa nhận: {', '.join(KHOA[k] for k in cho['Node'])} (không trả lời); thay đổi đang chờ trong hàng đợi, "
+                  "xem trang Phân tán, mục Đồng bộ danh mục."))
+    else:
+        bao("success", ok)
+    st.rerun()
+
+
+def chon_de_sua(df, cot_ma, cot_ten, key):
+    """Ô chọn 'Thêm mới' hoặc một dòng có sẵn để sửa; trả về dict dòng đó (hoặc None khi thêm mới)."""
+    theo_ma = {r[cot_ma]: r for r in df.to_dict("records")}
+    ma = st.selectbox("Thêm mới hoặc chọn để sửa", [None] + list(theo_ma), key=key,
+                      format_func=lambda m: "➕ Thêm mới" if m is None else f"{m} - {theo_ma[m][cot_ten]}")
+    return theo_ma.get(ma)
+
+
+def danh_muc():
+    t = st.tabs([":material/menu_book: Môn học", ":material/calendar_month: Học kỳ",
+                 ":material/person: Giảng viên", ":material/groups: Lớp"])
+    khoa3 = ["CNTT", "NN", "DL"]
+    with t[0]:
+        st.caption("Bản chính ở điều phối, bản sao ở 3 node. Lưu xong thủ tục tự đồng bộ; node mất kết nối sẽ nhận sau qua hàng đợi.")
+        df = xem("SELECT MaMH, TenMH, SoTinChi, LoaiMH, MaKhoa FROM dbo.MonHoc ORDER BY MaMH")
+        if df is not None:
+            bang(df, height=250)
+            r = chon_de_sua(df, "MaMH", "TenMH", "dm_mon")
+            with st.form(f"f_mon_{r['MaMH'] if r else 'moi'}"):
+                a, b = st.columns(2)
+                ma = a.text_input("Mã môn", r["MaMH"] if r else "", max_chars=10, disabled=r is not None, placeholder="ví dụ CNTT111")
+                ten = b.text_input("Tên môn", r["TenMH"] if r else "")
+                tc = a.number_input("Số tín chỉ", 1, 6, int(r["SoTinChi"]) if r else 3)
+                loai = b.selectbox("Loại môn", ["Bắt buộc", "Tự chọn"], index=["Bắt buộc", "Tự chọn"].index(r["LoaiMH"]) if r else 0)
+                ds = [None] + khoa3
+                kh = a.selectbox("Khoa phụ trách", ds, index=ds.index(r["MaKhoa"]) if r and r["MaKhoa"] in ds else 0,
+                                 format_func=lambda k: "Môn chung toàn trường" if k is None else KHOA[k])
+                if st.form_submit_button("Lưu môn học", type="primary", icon=":material/save:"):
+                    luu_danh_muc("EXEC dbo.dm_LuuMonHoc @MaMH = ?, @TenMH = ?, @SoTinChi = ?, @LoaiMH = ?, @MaKhoa = ?",
+                                 ma.strip(), ten.strip(), int(tc), loai, kh, ok=f"Đã lưu môn {ma.strip()}.", dong_bo=True)
+    with t[1]:
+        st.caption("Cũng là danh mục nhân bản: lưu xong tự đồng bộ xuống 3 node.")
+        df = xem("SELECT MaHK, TenHK, NamHoc, NgayBatDau, NgayKetThuc FROM dbo.HocKy ORDER BY NgayBatDau")
+        if df is not None:
+            bang(df)
+            r = chon_de_sua(df, "MaHK", "TenHK", "dm_hk")
+            with st.form(f"f_hk_{r['MaHK'] if r else 'moi'}"):
+                a, b = st.columns(2)
+                ma = a.text_input("Mã học kỳ", r["MaHK"] if r else "", max_chars=10, disabled=r is not None, placeholder="ví dụ HK2-2627")
+                ds = ["Học kỳ 1", "Học kỳ 2", "Học kỳ hè"]
+                ten = b.selectbox("Tên học kỳ", ds, index=ds.index(r["TenHK"]) if r else 0)
+                nam = a.text_input("Năm học", r["NamHoc"] if r else "", max_chars=9, placeholder="ví dụ 2026-2027")
+                bd = b.date_input("Ngày bắt đầu", r["NgayBatDau"] if r else date.today())
+                kt = a.date_input("Ngày kết thúc", r["NgayKetThuc"] if r else date.today())
+                if st.form_submit_button("Lưu học kỳ", type="primary", icon=":material/save:"):
+                    luu_danh_muc("EXEC dbo.dm_LuuHocKy @MaHK = ?, @TenHK = ?, @NamHoc = ?, @NgayBatDau = ?, @NgayKetThuc = ?",
+                                 ma.strip(), ten, nam.strip(), bd, kt, ok=f"Đã lưu học kỳ {ma.strip()}.", dong_bo=True)
+    with t[2]:
+        st.caption("Giảng viên được phân mảnh ngang theo khoa: mỗi người chỉ nằm ở node của khoa mình.")
+        df = xem(BA_NODE.format("GiangVien") + " ORDER BY MaKhoa, MaGV")
+        if df is not None:
+            bang(df, height=250)
+            r = chon_de_sua(df, "MaGV", "HoTen", "dm_gv")
+            with st.form(f"f_gv_{r['MaGV'] if r else 'moi'}"):
+                a, b = st.columns(2)
+                ma = a.text_input("Mã giảng viên", r["MaGV"] if r else "", max_chars=10, disabled=r is not None, placeholder="ví dụ GVCNTT09")
+                ten = b.text_input("Họ tên", r["HoTen"] if r else "")
+                kh = a.selectbox("Khoa", khoa3, index=khoa3.index(r["MaKhoa"]) if r else 0, format_func=KHOA.get, disabled=r is not None,
+                                 help="Quyết định giảng viên được lưu ở node nào. Không đổi được khoa của giảng viên đã có.")
+                gt = b.selectbox("Giới tính", ["Nam", "Nữ"], index=["Nam", "Nữ"].index(r["GioiTinh"]) if r else 0)
+                ns = a.date_input("Ngày sinh", r["NgaySinh"] if r else date(1985, 1, 1), min_value=date(1950, 1, 1), max_value=date(2003, 12, 31))
+                ds = ["Thạc sĩ", "Tiến sĩ", "PGS.TS", "GS.TS"]
+                hv = b.selectbox("Học vị", ds, index=ds.index(r["HocVi"]) if r else 0)
+                email = a.text_input("Email", r["Email"] if r else "", placeholder="ten@gv.qlsv.edu.vn")
+                sdt = b.text_input("Điện thoại (không bắt buộc)", (r["DienThoai"] or "") if r else "", max_chars=10)
+                if st.form_submit_button("Lưu giảng viên", type="primary", icon=":material/save:"):
+                    luu_danh_muc("EXEC dbo.dm_LuuGiangVien @MaGV = ?, @HoTen = ?, @GioiTinh = ?, @NgaySinh = ?, @HocVi = ?, @Email = ?, "
+                                 "@MaKhoa = ?, @DienThoai = ?", ma.strip(), ten.strip(), gt, ns, hv, email.strip(), kh, sdt.strip() or None,
+                                 ok=f"Đã lưu giảng viên {ma.strip()} ở node {KHOA[kh]}.")
+    with t[3]:
+        st.caption("Lớp cũng nằm ở node của khoa. Giảng viên chủ nhiệm phải thuộc cùng khoa.")
+        df = xem(BA_NODE.format("Lop") + " ORDER BY MaKhoa, MaLop")
+        gv = xem("SELECT MaGV, HoTen, MaKhoa FROM (" + BA_NODE.format("GiangVien") + ") g ORDER BY MaGV")
+        if df is not None and gv is not None:
+            bang(df)
+            r = chon_de_sua(df, "MaLop", "TenLop", "dm_lop")
+            kh = st.selectbox("Khoa", khoa3, index=khoa3.index(r["MaKhoa"]) if r else 0, format_func=KHOA.get, disabled=r is not None,
+                              key=f"dm_lop_khoa_{r['MaLop'] if r else 'moi'}", help="Quyết định lớp được lưu ở node nào.")
+            ten_gv = dict(zip(gv["MaGV"], gv["HoTen"]))
+            ds = [None] + gv[gv["MaKhoa"] == kh]["MaGV"].tolist()
+            with st.form(f"f_lop_{r['MaLop'] if r else 'moi'}_{kh}"):
+                a, b = st.columns(2)
+                ma = a.text_input("Mã lớp", r["MaLop"] if r else "", max_chars=15, disabled=r is not None, placeholder="ví dụ 67.CNTT-1")
+                ten = b.text_input("Tên lớp", r["TenLop"] if r else "", placeholder="ví dụ CNTT K67-1")
+                nk = a.text_input("Niên khóa", r["NienKhoa"] if r else "", max_chars=9, placeholder="ví dụ 2025-2029")
+                cn = b.selectbox("Giảng viên chủ nhiệm", ds, index=ds.index(r["MaGVCN"]) if r and r["MaGVCN"] in ds else 0,
+                                 format_func=lambda m: "Chưa phân công" if m is None else f"{m} - {ten_gv[m]}")
+                if st.form_submit_button("Lưu lớp", type="primary", icon=":material/save:"):
+                    luu_danh_muc("EXEC dbo.dm_LuuLop @MaLop = ?, @TenLop = ?, @NienKhoa = ?, @MaKhoa = ?, @MaGVCN = ?",
+                                 ma.strip(), ten.strip(), nk.strip(), kh, cn, ok=f"Đã lưu lớp {ma.strip()} ở node {KHOA[kh]}.")
+
+
 TEP_VAI_TRO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "14_demo_vai_tro.sql")
 VAI_TRO_THU = ["lg_admin", "lg_daotao", "lg_giaovu_cntt", "lg_giaovu_nn", "lg_bgh"]
 
@@ -1352,7 +1500,7 @@ def phan_quyen():
 
 TRANG = {"Thống kê": thong_ke, "Tìm kiếm": trang_tim_kiem,
          "Bảng điểm": bang_diem, "Cảnh báo học vụ": canh_bao, "Nhập điểm": nhap_diem, "Sinh viên": sinh_vien,
-         "Đăng ký học phần": dang_ky, "Lớp học phần": lop_hoc_phan, "Phân tán": phan_tan, "Nhật ký": nhat_ky,
+         "Đăng ký học phần": dang_ky, "Lớp học phần": lop_hoc_phan, "Danh mục": danh_muc, "Phân tán": phan_tan, "Nhật ký": nhat_ky,
          "Kiểm thử": kiem_thu, "Phân quyền": phan_quyen}
 
 

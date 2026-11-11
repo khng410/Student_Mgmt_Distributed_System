@@ -1,4 +1,4 @@
-"""Chạy thử 5 file demo và đối chiếu với kết quả mong đợi, in ĐÚNG / SAI cho từng điểm cần cho giảng viên xem.
+"""Chạy thử 6 file demo và đối chiếu với kết quả mong đợi, in ĐÚNG / SAI cho từng điểm cần cho giảng viên xem.
 Dùng trước buổi demo (sau scripts/trien_khai.py, khi dữ liệu còn là dữ liệu mẫu):  python3 -I scripts/kiem_tra_demo.py
 Các file đều tự hoàn tác (ROLLBACK) nên chạy bao nhiêu lần dữ liệu mẫu vẫn nguyên."""
 import contextlib, io, os, re, sys
@@ -59,6 +59,17 @@ MONG_DOI = {
         ("E1. Sau index: chỉ đọc 3 trang", r"logical reads 3,"),
         ("E2. Index thật có ở node CNTT", r"^QLSV_CNTT \| IX_DangKy_MaLHP \| NONCLUSTERED$"),
         ("E2. Index thật có ở node Du lịch", r"^QLSV_DuLich \| IX_DangKy_MaLHP \| NONCLUSTERED$"),
+    ],
+    "15_dong_bo_danh_muc.sql": [
+        ("Sửa qua dm_LuuMonHoc: cả 3 bản sao đổi ngay", r"^Sau dm_LuuMonHoc \| 4\. Node Du lịch \(bản sao\) \| .*\(sửa qua thủ tục\)$"),
+        ("... và hàng đợi rỗng", r"^Sau dm_LuuMonHoc: số mục còn chờ \| 0$"),
+        ("Sửa thẳng bằng UPDATE: trigger xếp mục cho từng node", r"^Sau UPDATE thẳng: hàng đợi \| DL \| MonHoc \| NN101 \| UPDATE$"),
+        ("... bản sao chưa đổi cho tới khi xử lý hàng đợi", r"^Sau UPDATE thẳng \| 2\. Node CNTT \(bản sao\) \| Ngữ pháp tiếng Anh 1$"),
+        ("dm_XuLyHangDoi đẩy xuống, bản sao khớp", r"^Sau dm_XuLyHangDoi \| 3\. Node Ngoại ngữ \(bản sao\) \| .*\(sửa thẳng\)$"),
+        ("Học kỳ mới có ở cả 3 node", r"^Học kỳ HK2-2627 có ở số node \| 3$"),
+        ("Giảng viên mới chỉ nằm ở node của khoa", r"^Chỉ node Du lịch có giảng viên mới \| 0 \| 1$"),
+        ("Mã khoa sai bị từ chối (50105)", r"^50105 \|"),
+        ("Hàng đợi rỗng sau các ví dụ", r"^Hàng đợi sau ví dụ \| 0$"),
     ],
     "12_linked_server.sql": [
         ("Dữ liệu điều phối nằm ở instance qlsv_tonghop", r"^Điều phối \| qlsv_tonghop \| 72 \|"),
