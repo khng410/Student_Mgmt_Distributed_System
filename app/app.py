@@ -4,6 +4,7 @@
 Mỗi vai trò đăng nhập bằng một SQL login riêng (xem database/10_security.sql) nên quyền do SQL Server kiểm soát,
 ứng dụng chỉ ẩn bớt chức năng cho gọn.
 """
+import os
 import re
 import secrets
 import threading
@@ -26,9 +27,9 @@ VAI_TRO = {
     "lg_giaovu_dl": "Giáo vụ khoa Du lịch",
     "lg_bgh": "Ban giám hiệu",
 }
-GIAOVU = ["Thống kê", "Tìm kiếm", "Bảng điểm", "Nhập điểm"]
+GIAOVU = ["Thống kê", "Tìm kiếm", "Bảng điểm", "Cảnh báo học vụ", "Nhập điểm"]
 DAOTAO = GIAOVU + ["Sinh viên", "Đăng ký học phần", "Lớp học phần", "Phân tán", "Nhật ký"]
-MENU = {"lg_bgh": ["Thống kê"], "lg_daotao": DAOTAO, "lg_admin": DAOTAO + ["Kiểm thử"],
+MENU = {"lg_bgh": ["Thống kê"], "lg_daotao": DAOTAO, "lg_admin": DAOTAO + ["Kiểm thử", "Phân quyền"],
         "lg_giaovu_cntt": GIAOVU, "lg_giaovu_nn": GIAOVU, "lg_giaovu_dl": GIAOVU}
 
 KHOA = {None: "Toàn trường", "CNTT": "CNTT", "NN": "Ngoại ngữ", "DL": "Du lịch"}
@@ -56,29 +57,32 @@ NHAN_COT = {"DiemQT": "Điểm quá trình", "DiemThi": "Điểm thi", "DiemTK":
             "SoSinhVien": "Số sinh viên", "SoLuotDangKy": "Lượt đăng ký", "SoLuotCoDiem": "Lượt có điểm",
             "Gioi": "Giỏi", "Kha": "Khá", "TrungBinh": "Trung bình", "Yeu": "Yếu", "KhongDat": "Không đạt",
             "SiSoToiDa": "Sĩ số tối đa", "DaDangKy": "Đã đăng ký", "NgayDangKy": "Ngày đăng ký", "Nhom": "Nhóm",
-            "SoMonCoDiem": "Số môn có điểm", "TinChiTichLuy": "Tín chỉ tích lũy", "NodeKhoa": "Node",
+            "SoMonCoDiem": "Số môn có điểm", "SoMon": "Số môn có điểm",
+            "SoMonKhongDat": "Môn không đạt", "LyDo": "Lý do cảnh báo", "TinChiTichLuy": "Tín chỉ tích lũy", "NodeKhoa": "Node",
             "ThoiGian": "Thời gian", "TenBang": "Bảng", "HanhDong": "Hành động", "KhoaChinh": "Khóa chính",
             "NoiDungCu": "Trước", "NoiDungMoi": "Sau", "NguoiThucHien": "Người thực hiện", "Node": "Node",
             "CCCD": "CCCD", "DienThoai": "Điện thoại", "Email": "Email", "DiaChi": "Địa chỉ",
             "MaLoi": "Mã lỗi", "ThongBao": "Thông báo"}
 
 # Thanh bên: chức năng chia nhóm, mỗi chức năng một biểu tượng (Material Symbols) và một dòng mô tả dưới tiêu đề trang
-NHOM_MENU = [("Tổng quan", ["Thống kê"]), ("Tra cứu", ["Tìm kiếm", "Bảng điểm"]),
+NHOM_MENU = [("Tổng quan", ["Thống kê"]), ("Tra cứu", ["Tìm kiếm", "Bảng điểm", "Cảnh báo học vụ"]),
              ("Nghiệp vụ", ["Nhập điểm", "Sinh viên", "Đăng ký học phần", "Lớp học phần"]),
-             ("Hệ thống phân tán", ["Phân tán", "Nhật ký"]), ("Quản trị", ["Kiểm thử"])]
-BIEU_TUONG = {"Thống kê": "monitoring", "Tìm kiếm": "search", "Bảng điểm": "grading", "Nhập điểm": "edit_note",
+             ("Hệ thống phân tán", ["Phân tán", "Nhật ký"]), ("Quản trị", ["Kiểm thử", "Phân quyền"])]
+BIEU_TUONG = {"Thống kê": "monitoring", "Tìm kiếm": "search", "Bảng điểm": "grading", "Cảnh báo học vụ": "warning", "Nhập điểm": "edit_note",
               "Sinh viên": "group", "Đăng ký học phần": "how_to_reg", "Lớp học phần": "class",
-              "Phân tán": "hub", "Nhật ký": "history", "Kiểm thử": "science"}
+              "Phân tán": "hub", "Nhật ký": "history", "Kiểm thử": "science", "Phân quyền": "shield_person"}
 MO_TA = {"Thống kê": "Kết quả học tập theo khoa và học kỳ, tổng hợp từ cả 3 node.",
          "Tìm kiếm": "Tìm sinh viên toàn trường theo mã, họ tên (không cần gõ dấu), khoa, lớp, trạng thái.",
-         "Bảng điểm": "Bảng điểm của một sinh viên hoặc của cả lớp.",
+         "Bảng điểm": "Bảng điểm của một sinh viên hoặc của cả lớp, lịch sử sửa điểm, tải về file CSV.",
+         "Cảnh báo học vụ": "Sinh viên có điểm trung bình tích lũy thấp hoặc có môn không đạt, tổng hợp từ cả 3 node.",
          "Nhập điểm": "Nhập, sửa điểm quá trình và điểm thi. Điểm tổng kết được tính tự động.",
          "Sinh viên": "Thêm, sửa, xóa và chuyển khoa. Mỗi thao tác ghi cả hai mảnh dữ liệu trong một giao dịch.",
          "Đăng ký học phần": "Đăng ký hoặc hủy lớp học phần cho một sinh viên.",
          "Lớp học phần": "Mở lớp học phần mới ở node của khoa giảng viên.",
          "Phân tán": "Dữ liệu nằm ở node nào, một sinh viên được ghép từ đâu, và demo giao dịch phân tán.",
          "Nhật ký": "Các thay đổi do trigger ghi lại ở từng node.",
-         "Kiểm thử": "Chạy thử hàm, thủ tục và trigger, đối chiếu với kết quả mong đợi. Mọi thay đổi đều được hoàn tác."}
+         "Kiểm thử": "Chạy thử hàm, thủ tục và trigger, đối chiếu với kết quả mong đợi. Mọi thay đổi đều được hoàn tác.",
+         "Phân quyền": "Cùng 8 việc, thử dưới từng vai trò: ai được làm gì, ai bị SQL Server từ chối."}
 
 
 def thu_tu_hk(ma):
@@ -246,7 +250,7 @@ def bieu_do_diem(df):
            alt.Tooltip("DiemTB:Q", title="Điểm TB", format=".2f"), alt.Tooltip("TyLeDat:Q", title="Tỷ lệ đạt (%)", format=".1f"),
            alt.Tooltip("SoLuotCoDiem:Q", title="Lượt có điểm"), alt.Tooltip("SoSinhVien:Q", title="Số sinh viên")]
     hk = alt.X("MaHK:N", title=None, sort=sorted(df["MaHK"].unique(), key=thu_tu_hk), axis=alt.Axis(labelAngle=0))
-    mau = alt.Color("TenKhoa:N", title=None, scale=mau_khoa(), legend=alt.Legend(orient="bottom"))
+    mau = alt.Color("TenKhoa:N", title=None, scale=mau_khoa(), legend=alt.Legend(orient="bottom", labelLimit=0))
     chon = alt.selection_point(name="chon_khoa", fields=["TenKhoa"], bind="legend")   # bấm chú giải: chọn khoa (Shift: chọn nhiều)
     re_chuot = alt.selection_point(name="re_chuot", on="pointerover", nearest=True, empty=False, fields=["TenKhoa", "MaHK"])
     mo = alt.condition(chon, alt.value(1), alt.value(0.15))
@@ -270,7 +274,7 @@ def ban_do_nhiet(df):
     """Tỷ lệ đạt của từng khoa ở từng học kỳ: ô càng đậm tỷ lệ càng cao, số ghi ngay trong ô."""
     goc = alt.Chart(df).encode(
         x=alt.X("MaHK:N", title=None, sort=sorted(df["MaHK"].unique(), key=thu_tu_hk), axis=alt.Axis(labelAngle=0, orient="top")),
-        y=alt.Y("TenKhoa:N", title=None),
+        y=alt.Y("TenKhoa:N", title=None, axis=alt.Axis(labelLimit=0)),   # labelLimit=0: không cắt tên khoa dài
         tooltip=[alt.Tooltip("TenKhoa:N", title="Khoa"), alt.Tooltip("MaHK:N", title="Học kỳ"),
                  alt.Tooltip("TyLeDat:Q", title="Tỷ lệ đạt (%)", format=".1f"), alt.Tooltip("SoLuotKhongDat:Q", title="Lượt không đạt"),
                  alt.Tooltip("SoLuotCoDiem:Q", title="Lượt có điểm"), alt.Tooltip("DiemTB:Q", title="Điểm TB", format=".2f")])
@@ -366,7 +370,7 @@ def thong_ke():
     dai["ThuTu"] = dai["HocLuc"].map({h: i for i, h in enumerate(HOC_LUC)})
     chon_hl = alt.selection_point(name="chon_hoc_luc", fields=["HocLuc"], bind="legend")
     thanh = alt.Chart(dai).mark_bar(cornerRadius=3, stroke="white", strokeWidth=1.5).encode(
-        y=alt.Y("TenKhoa:N", title=None),
+        y=alt.Y("TenKhoa:N", title=None, axis=alt.Axis(labelLimit=0)),   # labelLimit=0: không cắt tên khoa dài
         x=alt.X("SoLuot:Q", stack="normalize", title="Tỷ lệ trên số lượt có điểm", axis=alt.Axis(format="%")),
         color=alt.Color("HocLuc:N", title=None, sort=list(HOC_LUC), legend=alt.Legend(orient="bottom"),
                         scale=alt.Scale(domain=list(HOC_LUC), range=[c[0] for c in HOC_LUC.values()])),
@@ -377,6 +381,18 @@ def thong_ke():
         st.altair_chart(thanh.properties(height=70 + 44 * len(ph)).configure_view(stroke=None), width="stretch")
     st.caption("Giỏi ≥ 8 · Khá ≥ 6,5 · Trung bình ≥ 5 · Yếu ≥ 4 · Không đạt < 4. Bấm một mức ở chú giải để làm nổi bật.")
     bang(ph, diem=["DiemTB"])
+
+    try:                                   # hàm này chỉ cấp cho Đào tạo và Quản trị; vai trò khác thì bỏ qua phần xếp hạng
+        top = chay("SELECT MaSV, HoTen, TenKhoa, SoMon, DiemTB FROM dbo.fn_TopSinhVien(NULL, 100, 8)")[0]
+    except pyodbc.Error:
+        return
+    top = top[top["TenKhoa"].isin(df["TenKhoa"])].head(5).reset_index(drop=True)
+    if top.empty:
+        return
+    st.subheader("Sinh viên dẫn đầu", anchor=False)
+    st.caption("5 sinh viên có điểm trung bình tích lũy cao nhất trong các khoa đang chọn (cần ít nhất 8 môn có điểm).")
+    top.insert(0, "Hạng", ["🥇", "🥈", "🥉", "4", "5"][:len(top)])
+    bang(top, diem=["DiemTB"])
 
 
 def bieu_do_bang_diem(df):
@@ -454,6 +470,29 @@ def trang_tim_kiem():
     tim_kiem()
 
 
+def nut_tai_csv(df, ten_tep, nhan="Tải về CSV", key=None):
+    """Nút tải bảng về file CSV. Mã hóa UTF-8 có BOM để Excel mở đúng tiếng Việt; tiêu đề cột bằng tiếng Việt."""
+    du_lieu = df.rename(columns=NHAN_COT).to_csv(index=False).encode("utf-8-sig")
+    st.download_button(nhan, du_lieu, file_name=ten_tep, mime="text/csv", icon=":material/download:", key=key)
+
+
+def lich_su_diem(sv):
+    """Các lần sửa điểm, xóa đăng ký của một sinh viên, do trigger trg_DangKy_GhiNhatKy ghi ở node của khoa."""
+    db = DB_THEO_KHOA[sv["MaKhoa"]]                                   # tên database lấy từ danh sách cố định
+    df = xem(f"SELECT ThoiGian, KhoaChinh, HanhDong, NoiDungCu, NoiDungMoi, NguoiThucHien FROM {db}.dbo.NhatKy "
+             "WHERE TenBang = N'DangKy' AND KhoaChinh LIKE ? ORDER BY ThoiGian DESC, MaNK DESC", sv["MaSV"] + "|%")
+    if df is None:
+        return
+    if df.empty:
+        st.caption("Chưa có lần sửa điểm nào được ghi cho sinh viên này. Nhật ký do trigger ở node ghi mỗi khi điểm bị sửa "
+                   "hoặc đăng ký bị xóa.")
+        return
+    df.insert(1, "MaLHP", df.pop("KhoaChinh").str.split("|").str[1])
+    df["NguoiThucHien"] = df["NguoiThucHien"].map(lambda u: f"{VAI_TRO[u]} ({u})" if u in VAI_TRO else u)
+    st.caption(f"{len(df)} lần thay đổi, mới nhất ở trên. Dữ liệu lấy từ bảng `NhatKy` của node `{db}`.")
+    bang(df)
+
+
 def bang_diem():
     t1, t2 = st.tabs(["Theo sinh viên", "Theo lớp"])
     with t1:
@@ -478,12 +517,63 @@ def bang_diem():
                     with st.container(border=True):
                         bieu_do_bang_diem(kq[0])
                     bang(kq[0], diem=["DiemQT", "DiemThi"], tk=["DiemTK"])
+                    nut_tai_csv(kq[0], f"bang_diem_{sv['MaSV']}{'_' + hk if hk else ''}.csv", key="tai_bd_sv")
+                with st.expander("Lịch sử sửa điểm"):
+                    lich_su_diem(sv)
     with t2:
         lop = st.selectbox("Lớp", danh_sach("SELECT DISTINCT MaLop FROM dbo.vw_SinhVien_ToanCuc ORDER BY 1", "MaLop"))
         if lop:
             df = xem("SELECT * FROM dbo.fn_DanhSachLop(?) ORDER BY MaSV", lop)
             if df is not None:
                 bang(df, tk=["DiemTBTichLuy"])
+                nut_tai_csv(df, f"danh_sach_lop_{lop}.csv", key="tai_bd_lop")
+
+
+def canh_bao():
+    """Sinh viên cần chú ý: điểm TB tích lũy dưới ngưỡng, hoặc số môn không đạt từ một mức trở lên."""
+    df = xem("SELECT MaSV, HoTen, TenLop, TenKhoa, COUNT(DiemTK) AS SoMonCoDiem, "
+             "SUM(CASE WHEN DiemTK < 4 THEN 1 ELSE 0 END) AS SoMonKhongDat, "
+             "CAST(SUM(DiemTK * SoTinChi) / NULLIF(SUM(CASE WHEN DiemTK IS NOT NULL THEN SoTinChi END), 0) AS DECIMAL(4,2)) AS DiemTBTichLuy "
+             "FROM dbo.vw_BangDiem GROUP BY MaSV, HoTen, TenLop, TenKhoa HAVING COUNT(DiemTK) > 0")
+    if df is None:
+        return
+    if df.empty:
+        st.info("Chưa có sinh viên nào có điểm.")
+        return
+    a, b = st.columns(2)
+    nguong = a.slider("Cảnh báo khi điểm TB tích lũy dưới", 4.0, 8.0, 6.0, 0.1, key="cb_nguong")
+    so_mon = b.slider("hoặc số môn không đạt (điểm tổng kết dưới 4) từ", 1, 5, 1, key="cb_so_mon")
+    thap, rot = df["DiemTBTichLuy"] < nguong, df["SoMonKhongDat"] >= so_mon
+    cb = df[thap | rot].copy()
+    cb["LyDo"] = [" + ".join(x for x in (f"điểm TB dưới {nguong:.1f}" if t else "", f"{int(n)} môn không đạt" if r else "") if x)
+                  for t, r, n in zip(thap[thap | rot], rot[thap | rot], cb["SoMonKhongDat"])]
+    cb = cb.sort_values(["DiemTBTichLuy", "SoMonKhongDat"], ascending=[True, False]).reset_index(drop=True)
+    m = st.columns(4)
+    m[0].metric("Sinh viên bị cảnh báo", len(cb), help=f"Trên {len(df)} sinh viên đã có điểm.", border=True)
+    m[1].metric("Tỷ lệ", f"{100 * len(cb) / len(df):.1f}%", border=True)
+    m[2].metric(f"Điểm TB dưới {nguong:.1f}", int(thap.sum()), border=True)
+    m[3].metric(f"Từ {so_mon} môn không đạt", int(rot.sum()), border=True)
+    if cb.empty:
+        st.success("Không có sinh viên nào chạm ngưỡng cảnh báo.", icon=":material/check_circle:")
+        return
+    if cb["TenKhoa"].nunique() > 1:
+        dem = cb.groupby("TenKhoa").size().reset_index(name="SoSV")
+        with st.container(border=True):
+            st.altair_chart(alt.Chart(dem).mark_bar(cornerRadius=3).encode(
+                y=alt.Y("TenKhoa:N", title=None, axis=alt.Axis(labelLimit=0)), x=alt.X("SoSV:Q", title="Số sinh viên bị cảnh báo", axis=alt.Axis(tickMinStep=1)),
+                color=alt.Color("TenKhoa:N", scale=mau_khoa(), legend=None),
+                tooltip=[alt.Tooltip("TenKhoa", title="Khoa"), alt.Tooltip("SoSV", title="Số sinh viên")]).properties(height=50 + 34 * len(dem)),
+                width="stretch")
+    st.caption(f"**{len(cb)}** sinh viên, điểm thấp nhất ở trên · :material/touch_app: bấm vào một dòng để xem chi tiết")
+    chon = bang(cb, tk=["DiemTBTichLuy"], on_select="rerun", selection_mode="single-row", key="cb_bang",
+                height=min(38 * len(cb) + 40, 390))
+    nut_tai_csv(cb, "canh_bao_hoc_vu.csv", key="tai_cb")
+    dong = chon.selection.rows if chon is not None else []
+    if dong and dong[0] < len(cb):
+        sv = xem("SELECT MaSV, HoTen, NgaySinh, GioiTinh, MaLop, TenKhoa, TrangThai FROM dbo.vw_SinhVien_ToanCuc WHERE MaSV = ?",
+                 cb.iloc[dong[0]]["MaSV"])
+        if sv is not None and not sv.empty:
+            the_sinh_vien(sv.iloc[0].to_dict())
 
 
 def diem_thay_doi(goc, moi):
@@ -839,6 +929,99 @@ def pt_bang_tho():
         bang(df, height=420)
 
 
+HAU_TO_THU = " (bản mới)"          # demo đồng bộ: sửa tên môn = thêm hậu tố này, bỏ sửa = gỡ hậu tố
+
+
+def pt_dong_bo():
+    """Mục 6: sửa một môn ở bản chính, thấy 3 bản sao ở node bị cũ, rồi đồng bộ bằng sp_DongBoDanhMuc."""
+    st.markdown("Khoa, Học kỳ, Môn học được **nhân bản**: bản chính ở điều phối, mỗi node giữ một bản sao. Sửa ở bản chính "
+                "**không tự lan** xuống node; thủ tục `sp_DongBoDanhMuc` chép thay đổi xuống.")
+    mon = xem("SELECT MaMH, TenMH FROM dbo.MonHoc ORDER BY MaMH")
+    if mon is None or mon.empty:
+        return
+    ten = dict(zip(mon["MaMH"], mon["TenMH"]))
+    ma = st.selectbox("Môn học", list(ten), format_func=lambda m: f"{m} - {ten[m]}", key="db_mon")
+    quan_tri = st.session_state.user == "lg_admin"
+    da_sua = ten[ma].endswith(HAU_TO_THU)
+    c1, c2, c3 = st.columns(3)
+    if c1.button("Bỏ sửa ở bản chính" if da_sua else "1. Sửa tên ở bản chính", icon=":material/edit:", width="stretch",
+                 disabled=not quan_tri, help=None if quan_tri else "Chỉ Quản trị sửa thẳng được danh mục; đăng nhập lg_admin để thử bước này."):
+        moi = ten[ma][:-len(HAU_TO_THU)] if da_sua else ten[ma] + HAU_TO_THU
+        try:
+            chay("UPDATE dbo.MonHoc SET TenMH = ? WHERE MaMH = ?", moi, ma)
+            bao("success", f"Đã đổi tên môn {ma} ở bản chính thành “{moi}”. Các bản sao ở node chưa đổi.")
+        except pyodbc.Error as e:
+            bao("error", loi(e))
+        st.rerun()
+    pham_vi = c2.selectbox("Đồng bộ xuống", [None, "CNTT", "NN", "DL"], key="db_pham_vi", label_visibility="collapsed",
+                           format_func=lambda k: "Đồng bộ cả 3 node" if k is None else f"Chỉ node {KHOA[k]}")
+    dong_bo = c3.button("2. Chạy sp_DongBoDanhMuc", type="primary", icon=":material/sync:", width="stretch")
+    if dong_bo:
+        try:
+            st.session_state["db_kq"] = chay("SET XACT_ABORT ON; EXEC dbo.sp_DongBoDanhMuc @MaKhoa = ?", pham_vi)[-1]
+            st.toast("Đã đồng bộ", icon="✅")
+        except pyodbc.Error as e:
+            st.session_state.pop("db_kq", None)
+            st.error(loi(e))
+
+    vi_tri = xem("SELECT N'Điều phối (bản chính)' AS Noi, TenMH, SoTinChi FROM dbo.MonHoc WHERE MaMH = ? "
+                 "UNION ALL SELECT N'Node CNTT (bản sao)', TenMH, SoTinChi FROM QLSV_CNTT.dbo.MonHoc WHERE MaMH = ? "
+                 "UNION ALL SELECT N'Node Ngoại ngữ (bản sao)', TenMH, SoTinChi FROM QLSV_NgoaiNgu.dbo.MonHoc WHERE MaMH = ? "
+                 "UNION ALL SELECT N'Node Du lịch (bản sao)', TenMH, SoTinChi FROM QLSV_DuLich.dbo.MonHoc WHERE MaMH = ?", ma, ma, ma, ma)
+    if vi_tri is None or vi_tri.empty:
+        return
+    goc = vi_tri.iloc[0]
+    vi_tri["Khớp bản chính"] = ["bản chính"] + ["✅ khớp" if (r.TenMH, r.SoTinChi) == (goc.TenMH, goc.SoTinChi) else "❌ lệch (bản cũ)"
+                                               for r in vi_tri.iloc[1:].itertuples()]
+    lech = int(vi_tri["Khớp bản chính"].str.startswith("❌").sum()) + (4 - len(vi_tri))
+    (st.success if lech == 0 else st.warning)(
+        f"Môn {ma}: cả 3 bản sao khớp bản chính." if lech == 0 else
+        f"Môn {ma}: {lech} bản sao đang lệch bản chính. Bấm “2. Chạy sp_DongBoDanhMuc” để chép thay đổi xuống.",
+        icon=":material/check_circle:" if lech == 0 else ":material/sync_problem:")
+    st.dataframe(vi_tri.style.map(lambda v: "background-color: #fee2e2; color: #0f172a" if str(v).startswith("❌") else
+                                  ("background-color: #dcfce7; color: #0f172a" if str(v).startswith("✅") else ""), subset=["Khớp bản chính"]),
+                 hide_index=True, width="stretch", column_config={"Noi": "Nơi lưu", "TenMH": "Tên môn", "SoTinChi": "Tín chỉ"})
+    if "db_kq" in st.session_state:
+        with st.expander("Kết quả lần đồng bộ gần nhất (số dòng thủ tục đã sửa, đã thêm ở từng node)", expanded=dong_bo):
+            st.dataframe(st.session_state["db_kq"], hide_index=True, width="stretch",
+                         column_config={"Bang": "Bảng", "DaSua": "Đã sửa", "DaThem": "Đã thêm"})
+
+
+def pt_trang_thai():
+    """Mục 5: hỏi từng instance qua Linked Server xem còn sống không, mất bao lâu để trả lời."""
+    st.markdown("Điều phối gửi một câu hỏi nhỏ tới từng node qua Linked Server. Thử dừng một node "
+                "(`docker stop qlsv_dulich`) rồi bấm **Kiểm tra lại**: node đó chuyển sang đỏ, các node khác vẫn xanh.")
+    st.button("Kiểm tra lại", icon=":material/refresh:", key="pt_kiem_tra")           # bấm nút chỉ để chạy lại trang
+    ket_qua = []
+    with st.spinner("Đang hỏi 4 instance (node mất kết nối sẽ mất khoảng 10 giây mới báo lỗi)..."):
+        for k, db in [("TH", "QLSV_TongHop")] + list(DB_THEO_KHOA.items()):
+            cau = ("SELECT @@SERVERNAME AS MayChu, (SELECT COUNT(*) FROM dbo.MonHoc) AS SoDong" if k == "TH" else
+                   f"SELECT MayChu, SoDong FROM OPENQUERY(LS_{db}, 'SELECT @@SERVERNAME AS MayChu, "
+                   f"(SELECT COUNT(*) FROM {db}.dbo.SinhVien) AS SoDong')")              # tên lấy từ danh sách cố định
+            bat_dau = time.time()
+            try:
+                r = chay(cau)[0].iloc[0]
+                ket_qua.append((k, db, True, r["MayChu"], int(r["SoDong"]), time.time() - bat_dau, None))
+            except pyodbc.Error as e:
+                ket_qua.append((k, db, False, None, None, time.time() - bat_dau, loi(e)))
+    song = sum(r[2] for r in ket_qua)
+    (st.success if song == 4 else st.error)(
+        f"{song}/4 instance đang hoạt động" + ("" if song == 4 else ". Dữ liệu ở node mất kết nối tạm thời không đọc, ghi được; "
+                                               "view toàn cục cũng lỗi vì cần đủ 3 node."),
+        icon=":material/check_circle:" if song == 4 else ":material/error:")
+    for cot, (k, db, ok, may_chu, so_dong, giay, thong_bao) in zip(st.columns(4), ket_qua):
+        with cot.container(border=True):
+            st.badge(db, color=HUY_HIEU_KHOA[k])
+            if ok:
+                st.markdown(":green[:material/circle:] **Hoạt động**")
+                st.metric("Thời gian trả lời", f"{giay * 1000:.0f} ms")
+                st.caption(f"máy chủ `{may_chu}` · {so_dong} " + ("môn học trong danh mục gốc" if k == "TH" else "sinh viên"))
+            else:
+                st.markdown(":red[:material/circle:] **Mất kết nối**")
+                st.metric("Báo lỗi sau", f"{giay:.1f} giây")
+                st.caption(thong_bao[:160])
+
+
 def pt_giao_dich():
     """Mục 4: demo COMMIT / ROLLBACK của một giao dịch ghi vào 2 instance."""
     st.markdown("Thêm một sinh viên thử vào **hai instance** trong **một giao dịch**: học vụ ở node CNTT, hồ sơ ở node điều phối. "
@@ -857,7 +1040,8 @@ def pt_giao_dich():
 
 
 MUC_PHAN_TAN = {"Dữ liệu nằm ở đâu": pt_phan_bo, "Một sinh viên, hai mảnh": pt_ghep_sinh_vien,
-                "Bảng của từng node": pt_bang_tho, "Giao dịch phân tán": pt_giao_dich}
+                "Bảng của từng node": pt_bang_tho, "Giao dịch phân tán": pt_giao_dich, "Trạng thái node": pt_trang_thai,
+                "Đồng bộ danh mục": pt_dong_bo}
 
 
 def phan_tan():
@@ -1086,10 +1270,90 @@ def kiem_thu():
                     st.code(sql, language="sql", wrap_lines=True)
 
 
+TEP_VAI_TRO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "database", "14_demo_vai_tro.sql")
+VAI_TRO_THU = ["lg_admin", "lg_daotao", "lg_giaovu_cntt", "lg_giaovu_nn", "lg_bgh"]
+
+
+def lo_demo_vai_tro():
+    """Lô lệnh thử 8 việc trong database/14_demo_vai_tro.sql (cùng file dùng khi demo bằng công cụ SQL)."""
+    with open(TEP_VAI_TRO, encoding="utf-8-sig") as f:
+        return next(lo for lo in re.split(r"^\s*GO\s*$", f.read(), flags=re.M) if "DECLARE @kq" in lo)
+
+
+def thu_vai_tro(login, lo):
+    """Chạy lô lệnh dưới danh nghĩa một login (EXECUTE AS LOGIN) rồi luôn trả kết nối về lg_admin."""
+    cur = st.session_state.conn.cursor()
+    try:
+        if login != st.session_state.user:
+            cur.execute(f"EXECUTE AS LOGIN = '{login}'")              # login lấy từ danh sách cố định VAI_TRO_THU
+        cur.execute("SET NOCOUNT ON; SET XACT_ABORT ON;\n" + lo)
+        while not cur.description:
+            if not cur.nextset():
+                return pd.DataFrame()
+        cot = [c[0] for c in cur.description]
+        return pd.DataFrame.from_records([tuple(r) for r in cur.fetchall()], columns=cot)
+    finally:
+        try:
+            cur.execute("IF @@TRANCOUNT > 0 ROLLBACK; WHILE SUSER_SNAME() <> ORIGINAL_LOGIN() REVERT;")
+        finally:
+            cur.close()
+
+
+def phan_quyen():
+    st.caption("Trang đóng vai từng tài khoản (EXECUTE AS LOGIN) và thử cùng 8 việc trong `database/14_demo_vai_tro.sql`. "
+               "Mọi lệnh ghi đều hoàn tác. Ô xanh: SQL Server cho phép; ô đỏ: SQL Server từ chối, kèm mã lỗi.")
+    if st.button("Thử 8 việc với 5 vai trò", type="primary", icon=":material/play_arrow:"):
+        try:
+            lo = lo_demo_vai_tro()
+        except (OSError, StopIteration):
+            st.error("Không đọc được database/14_demo_vai_tro.sql.")
+            return
+        kq, loi_ds = {}, []
+        with st.spinner("Đang thử dưới từng vai trò..."):
+            for lg in VAI_TRO_THU:
+                try:
+                    kq[lg] = thu_vai_tro(lg, lo)
+                except pyodbc.Error as e:
+                    loi_ds.append(f"{lg}: {loi(e)}")
+        st.session_state["pq_kq"], st.session_state["pq_loi"] = kq, loi_ds
+    for m in st.session_state.get("pq_loi", []):
+        st.error(m + "  \nNếu lỗi là không có quyền IMPERSONATE: chạy lại database/10_security.sql bằng sa.")
+    kq = st.session_state.get("pq_kq")
+    if not kq:
+        st.info("Bấm nút để chạy. Mất vài giây vì mỗi vai trò đọc và ghi thử trên cả 3 node.", icon=":material/info:")
+        return
+
+    def gon(v):                                       # "Được: 72 sinh viên" -> "✅ 72 sinh viên"; "BỊ TỪ CHỐI (lỗi 229)..." -> "⛔ lỗi 229"
+        if v.startswith("Được"):
+            return "✅ " + (v.split(": ", 1)[1] if ": " in v else "được")
+        ma = re.search(r"lỗi (\d+)", v)
+        return "⛔ từ chối" + (f" (lỗi {ma.group(1)})" if ma else "")
+    dau = next(iter(kq.values()))
+    ma_tran = pd.DataFrame({"Thử làm": dau["ThuLam"]})
+    for lg, df in kq.items():
+        ma_tran[VAI_TRO[lg]] = df["KetQua"].map(gon).values
+    to = lambda v: ("background-color: #dcfce7; color: #0f172a" if str(v).startswith("✅") else
+                    "background-color: #fee2e2; color: #0f172a" if str(v).startswith("⛔") else "")
+    st.dataframe(ma_tran.style.map(to, subset=list(ma_tran.columns[1:])), hide_index=True, width="stretch",
+                 height=38 * len(ma_tran) + 40)
+    with st.expander("Cách đọc bảng"):
+        st.markdown("- **Tạo bảng mới**: chỉ Quản trị được sửa cấu trúc CSDL (khác biệt với Phòng Đào tạo).\n"
+                    "- **Đọc thẳng bảng SinhVien_HoSo**: Đào tạo xem CCCD qua view nhưng bị DENY trên chính bảng.\n"
+                    "- **Giáo vụ**: chỉ thấy và chỉ nhập điểm cho khoa mình; sinh viên khoa khác bị lọc khỏi tầm nhìn "
+                    "nên thủ tục báo “Không tìm thấy sinh viên”.\n"
+                    "- **Ban giám hiệu**: chỉ xem thống kê.\n"
+                    "- Lỗi 229: không có quyền trên đối tượng. Lỗi 262: không có quyền tạo đối tượng. Lỗi 500xx: thủ tục tự báo.")
+    with st.expander("Thông báo đầy đủ của từng vai trò"):
+        for lg, df in kq.items():
+            st.markdown(f"**{VAI_TRO[lg]}** (`{lg}`)")
+            st.dataframe(df[["STT", "ThuLam", "KetQua"]], hide_index=True, width="stretch",
+                         column_config={"STT": "#", "ThuLam": "Thử làm", "KetQua": "Kết quả"})
+
+
 TRANG = {"Thống kê": thong_ke, "Tìm kiếm": trang_tim_kiem,
-         "Bảng điểm": bang_diem, "Nhập điểm": nhap_diem, "Sinh viên": sinh_vien,
+         "Bảng điểm": bang_diem, "Cảnh báo học vụ": canh_bao, "Nhập điểm": nhap_diem, "Sinh viên": sinh_vien,
          "Đăng ký học phần": dang_ky, "Lớp học phần": lop_hoc_phan, "Phân tán": phan_tan, "Nhật ký": nhat_ky,
-         "Kiểm thử": kiem_thu}
+         "Kiểm thử": kiem_thu, "Phân quyền": phan_quyen}
 
 
 # ----------------------------------------------------------------- khung chính

@@ -76,6 +76,12 @@ BEGIN
 END
 CLOSE c;
 DEALLOCATE c;
+
+-- Quản trị được đóng vai (EXECUTE AS LOGIN) 5 tài khoản còn lại ở instance điều phối: trang "Phân quyền" của ứng dụng
+-- dùng quyền này để thử cùng một việc dưới từng vai trò. Không cấp cho tài khoản nào khác.
+SET @sql = N'';
+SELECT @sql += N'GRANT IMPERSONATE ON LOGIN::' + ten + N' TO lg_admin; ' FROM @lg WHERE ten <> N'lg_admin';
+EXEC sp_executesql @sql;
 GO
 
 /* =====================================================================

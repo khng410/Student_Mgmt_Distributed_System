@@ -142,9 +142,10 @@ Chức năng theo vai trò:
 | Vai trò | Trang |
 | --- | --- |
 | Ban giám hiệu | Thống kê |
-| Giáo vụ | Thống kê, Tìm kiếm, Bảng điểm, Nhập điểm (chỉ khoa mình) |
-| Đào tạo, Quản trị | Các trang trên và thêm: Sinh viên (thêm, sửa, xóa, chuyển khoa), Đăng ký học phần, Lớp học phần, Phân tán (sơ đồ node, demo COMMIT/ROLLBACK), Nhật ký |
+| Giáo vụ | Thống kê, Tìm kiếm, Bảng điểm (kèm lịch sử sửa điểm, tải CSV), Cảnh báo học vụ, Nhập điểm (chỉ khoa mình) |
+| Đào tạo, Quản trị | Các trang trên và thêm: Sinh viên (thêm, sửa, xóa, chuyển khoa), Đăng ký học phần, Lớp học phần, Phân tán (dữ liệu ở node nào, ghép hai mảnh, bảng từng node, demo COMMIT/ROLLBACK, trạng thái kết nối 4 instance, đồng bộ danh mục), Nhật ký |
 | Quản trị | Thêm trang **Kiểm thử**: chạy 13 ca kiểm thử hàm, thủ tục, trigger (kể cả trigger chặn lỗi), mỗi ca báo ĐÚNG/SAI; mọi thay đổi đều được hoàn tác |
+| Quản trị | Thêm trang **Phân quyền**: đóng vai từng tài khoản (`EXECUTE AS LOGIN`, quyền `IMPERSONATE` cấp ở `10_security.sql`) và thử cùng 8 việc của `14_demo_vai_tro.sql`, hiện thành bảng vai trò × việc được làm |
 
 Tải lại trang (F5) vẫn giữ đăng nhập: mã phiên nằm trên địa chỉ trang, không giới hạn thời gian mặc định
 (`PHIEN_PHUT` trong `config.py`). Không chia sẻ địa chỉ khi đang đăng nhập.
